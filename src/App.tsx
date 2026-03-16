@@ -1,0 +1,429 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X } from 'lucide-react';
+import { generateNames } from './services/ai';
+import { GeneratedName, GenerateParams } from './types';
+
+const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
+const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
+
+const CustomSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (val: string) => void, options: string[], placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-white border-none rounded-2xl pl-4 pr-10 py-3.5 text-sm text-brand-900 text-left focus:ring-2 focus:ring-brand-800/20 shadow-[0px_2px_10px_rgba(0,0,0,0.02)] transition-all outline-none flex items-center justify-between"
+      >
+        <span className={value ? "text-brand-900" : "text-brand-900/50"}>
+          {value || placeholder}
+        </span>
+        <ChevronDown size={16} className={`text-brand-800/40 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-brand-900/5 overflow-hidden py-2"
+            >
+              <button
+                type="button"
+                onClick={() => { onChange(''); setIsOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-50 transition-colors ${!value ? 'text-brand-900 font-medium bg-brand-50/50' : 'text-brand-800/70'}`}
+              >
+                {placeholder}
+              </button>
+              {options.map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => { onChange(opt); setIsOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-50 transition-colors ${value === opt ? 'text-brand-900 font-medium bg-brand-50/50' : 'text-brand-800/70'}`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default function App() {
+  const [view, setView] = useState<'home' | 'loading' | 'results' | 'favorites'>('home');
+  
+  // Form State
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [meaning, setMeaning] = useState('');
+  const [style, setStyle] = useState('');
+  
+  // Results State
+  const [results, setResults] = useState<GeneratedName[]>([]);
+  const [favorites, setFavorites] = useState<GeneratedName[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  
+  // Load favorites on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('ai_nicknames_favorites');
+    if (saved) {
+      try {
+        setFavorites(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse favorites', e);
+      }
+    }
+  }, []);
+  
+  // Save favorites on change
+  useEffect(() => {
+    localStorage.setItem('ai_nicknames_favorites', JSON.stringify(favorites));
+  }, [favorites]);
+  
+  const handleGenerate = async () => {
+    let finalKeywords = [...keywords];
+    if (keywordInput.trim() && finalKeywords.length < 3) {
+      finalKeywords.push(keywordInput.trim());
+      setKeywords(finalKeywords);
+      setKeywordInput('');
+    }
+    
+    if (finalKeywords.length === 0) return;
+    
+    setView('loading');
+    try {
+      const params: GenerateParams = { keywords: finalKeywords.join('、') };
+      if (meaning) params.meaning = meaning;
+      if (style) params.style = style;
+      
+      const newNames = await generateNames(params);
+      setResults(newNames.map(n => ({ ...n, id: Math.random().toString(36).substring(7) })));
+      setView('results');
+    } catch (error) {
+      console.error("Generation failed", error);
+      alert("生成失败，请稍后重试");
+      setView('home');
+    }
+  };
+  
+  const toggleFavorite = (name: GeneratedName) => {
+    setFavorites(prev => {
+      const exists = prev.find(f => f.name === name.name);
+      if (exists) {
+        return prev.filter(f => f.name !== name.name);
+      } else {
+        return [name, ...prev];
+      }
+    });
+  };
+  
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
+  };
+
+  const addKeyword = () => {
+    const val = keywordInput.trim().replace(/[,，、]/g, '');
+    if (val && keywords.length < 3 && !keywords.includes(val)) {
+      setKeywords([...keywords, val]);
+      setKeywordInput('');
+    } else if (val && keywords.includes(val)) {
+      setKeywordInput('');
+    }
+  };
+
+  const removeKeyword = (index: number) => {
+    setKeywords(keywords.filter((_, i) => i !== index));
+  };
+
+  const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === ',' || e.key === '，') {
+      e.preventDefault();
+      addKeyword();
+    } else if (e.key === 'Backspace' && keywordInput === '' && keywords.length > 0) {
+      setKeywords(keywords.slice(0, -1));
+    }
+  };
+
+  const isFavorite = (nameStr: string) => favorites.some(f => f.name === nameStr);
+
+  const renderCard = (item: GeneratedName) => (
+    <motion.div 
+      key={item.id}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-[32px] p-6 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] mb-4"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="font-serif text-3xl font-medium tracking-tight text-brand-900">{item.name}</h3>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => copyToClipboard(item.name, item.id)}
+            className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
+          >
+            {copiedId === item.id ? <Check size={18} /> : <Copy size={18} />}
+          </button>
+          <button 
+            onClick={() => toggleFavorite(item)}
+            className={`p-2 rounded-full transition-colors ${isFavorite(item.name) ? 'bg-rose-50 text-rose-500' : 'bg-brand-50 text-brand-800 hover:bg-brand-100'}`}
+          >
+            <Heart size={18} fill={isFavorite(item.name) ? "currentColor" : "none"} />
+          </button>
+        </div>
+      </div>
+      
+      <div className="mb-3">
+        <span className="text-sm font-medium text-brand-900 bg-brand-50 px-3 py-1 rounded-full">
+          {item.meaning_title}
+        </span>
+      </div>
+      
+      <p className="text-brand-800/80 text-sm leading-relaxed mb-4">
+        {item.meaning_desc}
+      </p>
+      
+      <div className="flex flex-wrap gap-2">
+        {item.style_tags.map((tag, idx) => (
+          <span key={idx} className="text-xs text-brand-800/60 uppercase tracking-wider">
+            # {tag}
+          </span>
+        ))}
+      </div>
+    </motion.div>
+  );
+
+  return (
+    <div className="min-h-screen max-w-md mx-auto relative overflow-hidden flex flex-col">
+      {/* Header */}
+      <header className="px-6 py-4 flex justify-between items-center z-10">
+        <div className="font-serif font-medium text-lg tracking-wide text-brand-900">
+          AI寓意网名
+        </div>
+        <button 
+          onClick={() => setView('favorites')}
+          className="p-2 text-brand-800 hover:bg-black/5 rounded-full transition-colors"
+        >
+          <Bookmark size={20} />
+        </button>
+      </header>
+
+      <main className="flex-1 px-6 pb-24 overflow-y-auto z-10">
+        <AnimatePresence mode="wait">
+          {view === 'home' && (
+            <motion.div
+              key="home"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="pt-8"
+            >
+              <h1 className="font-serif text-[32px] leading-[1.3] mb-4 text-brand-900">
+                AI 深度解析你的特质，<br/>定制独一无二的专属网名。
+              </h1>
+              <p className="text-brand-800/70 mb-10 text-sm leading-relaxed">
+                不仅是一个代号，更是你的个性表达。输入关键词，AI 将结合文学意象与情感共鸣，为你深度创作。
+              </p>
+
+              <div className="space-y-8">
+                {/* Keywords */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-brand-900">
+                    关键词 <span className="text-brand-800/50 font-normal">(必填，1-3个)</span>
+                  </label>
+                  <div className="w-full bg-white border-none rounded-2xl px-4 py-3 min-h-[56px] flex flex-wrap items-center gap-2 shadow-[0px_2px_10px_rgba(0,0,0,0.02)] transition-all focus-within:ring-2 focus-within:ring-brand-800/20">
+                    {keywords.map((kw, idx) => (
+                      <span key={idx} className="bg-brand-50 text-brand-900 px-3 py-1.5 rounded-xl text-sm flex items-center gap-1.5 font-medium">
+                        {kw}
+                        <button 
+                          onClick={() => removeKeyword(idx)} 
+                          className="text-brand-800/40 hover:text-brand-800 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                    {keywords.length < 3 && (
+                      <input
+                        type="text"
+                        value={keywordInput}
+                        onChange={(e) => setKeywordInput(e.target.value)}
+                        onKeyDown={handleKeywordKeyDown}
+                        onBlur={addKeyword}
+                        placeholder={keywords.length === 0 ? "输入后按空格或回车添加 (如: 月亮)" : "继续输入..."}
+                        className="flex-1 bg-transparent border-none outline-none text-brand-900 placeholder:text-brand-800/30 min-w-[120px] text-sm"
+                      />
+                    )}
+                  </div>
+                  <p className="text-xs text-brand-800/50">可输入姓名缩写、生日月份、喜欢的数字、事物、颜色等等你想要融入的元素</p>
+                </div>
+
+                {/* Meaning & Style Dropdowns */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-brand-900">
+                      期望寓意 <span className="text-brand-800/50 font-normal">(选填)</span>
+                    </label>
+                    <CustomSelect 
+                      value={meaning} 
+                      onChange={setMeaning} 
+                      options={MEANING_TAGS} 
+                      placeholder="不限寓意" 
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-brand-900">
+                      偏好风格 <span className="text-brand-800/50 font-normal">(选填)</span>
+                    </label>
+                    <CustomSelect 
+                      value={style} 
+                      onChange={setStyle} 
+                      options={STYLE_TAGS} 
+                      placeholder="不限风格" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Examples Section */}
+              <div className="mt-10">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-[1px] flex-1 bg-brand-900/10"></div>
+                  <span className="text-xs font-medium text-brand-800/40 uppercase tracking-widest">AI 定制示例</span>
+                  <div className="h-[1px] flex-1 bg-brand-900/10"></div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
+                    <div className="flex justify-between items-end mb-2">
+                      <div className="font-serif text-lg text-brand-900">屿白</div>
+                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">岛屿、白色、平静</div>
+                    </div>
+                    <p className="text-xs text-brand-800/70 leading-relaxed">
+                      <span className="font-medium text-brand-900">孤独中的纯粹：</span>将“岛屿”的独立与“白色”的纯净结合，象征在喧嚣中保持内心的宁静与清醒。
+                    </p>
+                  </div>
+                  <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
+                    <div className="flex justify-between items-end mb-2">
+                      <div className="font-serif text-lg text-brand-900">知南</div>
+                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">ZN、南方、温暖</div>
+                    </div>
+                    <p className="text-xs text-brand-800/70 leading-relaxed">
+                      <span className="font-medium text-brand-900">向阳而生的温柔：</span>巧妙融入姓名缩写ZN，借“南方”传达出温暖和煦的气质，适合温柔且坚定的人。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10">
+                <button
+                  onClick={handleGenerate}
+                  disabled={keywords.length === 0 && !keywordInput.trim()}
+                  className="w-full bg-[#5A5A40] text-white rounded-full py-4 font-medium tracking-wide flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#4A4A30] transition-colors shadow-lg shadow-[#5A5A40]/20"
+                >
+                  <Sparkles size={18} />
+                  立即生成
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'loading' && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center h-[60vh]"
+            >
+              <div className="w-16 h-16 border-4 border-brand-800/20 border-t-brand-800 rounded-full animate-spin mb-6"></div>
+              <p className="font-serif text-brand-900 text-lg">正在为你寻找灵感...</p>
+              <p className="text-brand-800/50 text-sm mt-2">这可能需要几秒钟</p>
+            </motion.div>
+          )}
+
+          {view === 'results' && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="pt-4"
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="font-serif text-2xl text-brand-900">为你定制的网名</h2>
+                <span className="text-sm text-brand-800/50">{results.length} 个结果</span>
+              </div>
+              
+              <div className="space-y-4">
+                {results.map(renderCard)}
+              </div>
+
+              <div className="mt-8 flex gap-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="flex-1 bg-white text-brand-900 rounded-full py-4 font-medium flex items-center justify-center gap-2 hover:bg-brand-50 transition-colors border border-brand-900/10"
+                >
+                  <ChevronLeft size={18} />
+                  重新编辑
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  className="flex-1 bg-[#5A5A40] text-white rounded-full py-4 font-medium flex items-center justify-center gap-2 hover:bg-[#4A4A30] transition-colors shadow-lg shadow-[#5A5A40]/20"
+                >
+                  <RefreshCw size={18} />
+                  换一批
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'favorites' && (
+            <motion.div
+              key="favorites"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="pt-4"
+            >
+              <div className="mb-6 flex items-center gap-3">
+                <button 
+                  onClick={() => setView('home')}
+                  className="p-2 -ml-2 text-brand-800 hover:bg-black/5 rounded-full transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <h2 className="font-serif text-2xl text-brand-900">我的收藏</h2>
+              </div>
+
+              {favorites.length === 0 ? (
+                <div className="text-center py-20">
+                  <Heart size={48} className="mx-auto text-brand-800/20 mb-4" />
+                  <p className="text-brand-800/50">还没有收藏任何网名</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {favorites.map(renderCard)}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  );
+}
