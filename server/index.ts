@@ -56,7 +56,8 @@ app.post("/api/generate", async (req, res) => {
       model: "doubao-seed-2-0-pro-260215",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.8,
-    });
+      thinking: { type: "disabled" },
+    } as any);
 
     const text = completion.choices[0]?.message?.content || "[]";
     // Extract JSON array from response (handle possible markdown wrapping)
