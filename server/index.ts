@@ -6,7 +6,22 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3000" }));
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
+  })
+);
 app.use(express.json());
 
 const client = new OpenAI({
@@ -70,7 +85,7 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
-const PORT = 3001;
+const PORT = Number(process.env.PORT || 3001);
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
