@@ -1,60 +1,56 @@
-# AI Username Generator
+# AI ç½‘åç”Ÿæˆå™¨
 
-Ò»¸öÇ°ºó¶Ë·ÖÀëµÄÖĞÎÄ AI ÍøÃûÉú³ÉÆ÷£ºÊäÈë¹Ø¼ü´Ê¡¢Ô¢ÒâºÍ·ç¸ñ£¬·µ»Ø 3 ¸öÓĞ½âÊÍµÄêÇ³ÆºòÑ¡¡£
+è¿™æ˜¯ä¸€ä¸ªå‰åç«¯åˆ†ç¦»çš„ AI ç½‘åç”Ÿæˆé¡¹ç›®ã€‚ç”¨æˆ·è¾“å…¥å…³é”®è¯ï¼Œå¹¶å¯é€‰å¯“æ„ä¸é£æ ¼åå¥½ï¼Œç³»ç»Ÿè¿”å› 3 ä¸ªå€™é€‰ç½‘ååŠè§£é‡Šã€‚
 
-## ÏßÉÏµØÖ·
-
-- Ç°¶Ë£¨CloudBase ¾²Ì¬ÍĞ¹Ü£©  
+## å½“å‰çº¿ä¸Šéƒ¨ç½²
+- å‰ç«¯ï¼ˆCloudBase é™æ€æ‰˜ç®¡ï¼‰ï¼š  
   https://ai-username-env-2glikc1y1cb803fb-1330697233.tcloudbaseapp.com/
-- ºó¶Ë API£¨CloudBase CloudRun£©  
+- åç«¯ï¼ˆCloudRunï¼‰ï¼š  
   https://ai-username-api-v2-234853-9-1330697233.sh.run.tcloudbase.com
-- API Â·¾¶  
-  `POST /api/generate`
+- æ¥å£è·¯å¾„ï¼š`POST /api/generate`
 
-## ÏîÄ¿½á¹¹
+## é¡¹ç›®ç»“æ„
+- `src/`ï¼šReact + Vite å‰ç«¯
+- `src/services/ai.ts`ï¼šå‰ç«¯ API è¯·æ±‚å°è£…
+- `server/index.ts`ï¼šExpress åç«¯æœåŠ¡
+- `cloudfunctions/generateApi/`ï¼šäº‘å‡½æ•°å¤‡é€‰å®ç°
+- `sql/`ï¼šåŸ‹ç‚¹æ•°æ®åº“è®¾è®¡ä¸äº‹ä»¶æ–‡æ¡£
+- `Dockerfile`ï¼šCloudRun å®¹å™¨æ„å»ºé…ç½®
 
-- `src/`£ºReact + Vite Ç°¶Ë
-- `src/services/ai.ts`£ºÇ°¶ËÇëÇó API£¨Ö§³Ö `VITE_API_BASE_URL`£©
-- `server/index.ts`£º±¾µØ Express ºó¶ËÈë¿Ú
-- `cloudfunctions/generateApi/`£ºCloudBase HTTP ÔÆº¯Êı°æ±¾£¨±¸ÓÃ£©
-- `Dockerfile`£ºCloudRun ÈİÆ÷²¿ÊğÅäÖÃ
-- `dist/`£ºÇ°¶Ë¹¹½¨²úÎï
+## æœ¬åœ°å¼€å‘
+å‰ç½®æ¡ä»¶ï¼šNode.js 18+
 
-## ±¾µØ¿ª·¢
+1. å®‰è£…ä¾èµ–
+```bash
+npm install
+```
+2. é…ç½® `.env.local`
+```bash
+DOUBAO_API_KEY=ä½ çš„å¯†é’¥
+FRONTEND_ORIGIN=http://localhost:3000
+```
+3. å¯åŠ¨åç«¯
+```bash
+npm run server
+```
+4. å¯åŠ¨å‰ç«¯
+```bash
+npm run dev
+```
 
-Ç°ÖÃÌõ¼ş£ºNode.js 18+
+## æ„å»ºä¸æ£€æŸ¥
+```bash
+npm run lint
+npm run build
+npm run preview
+```
 
-1. °²×°ÒÀÀµ
-   `npm install`
-2. ÅäÖÃ»·¾³±äÁ¿£¨`.env.local`£©
-   - `DOUBAO_API_KEY=...`
-   - ¿ÉÑ¡£º`FRONTEND_ORIGIN=http://localhost:3000`
-3. Æô¶¯Ç°¶Ë
-   `npm run dev`
-4. Æô¶¯ºó¶Ë
-   `npm run server`
+## CloudBase è¯´æ˜
+- ç¯å¢ƒ IDï¼š`ai-username-env-2glikc1y1cb803fb`
+- ä¸»æœåŠ¡ï¼š`ai-username-api-v2`
+- ç”Ÿäº§æ„å»ºå‰ï¼Œè¯·å°† `VITE_API_BASE_URL` è®¾ç½®ä¸º CloudRun åŸŸåã€‚
 
-³£ÓÃÃüÁî£º
-- `npm run lint`£ºTypeScript ÀàĞÍ¼ì²é
-- `npm run build`£º¹¹½¨Ç°¶Ë
-- `npm run preview`£ºÔ¤ÀÀ¹¹½¨½á¹û
-
-## CloudBase Éú²ú²¿ÊğËµÃ÷
-
-µ±Ç°Éú²ú»·¾³£º`ai-username-env-2glikc1y1cb803fb`
-
-- CloudRun ·şÎñÃû£º`ai-username-api-v2`
-- ÍÆ¼öÅäÖÃ£º`Cpu=0.5`¡¢`Mem=1`¡¢`MinNum=1`¡¢`MaxNum=2`
-- CloudRun »·¾³±äÁ¿£º
-  - `DOUBAO_API_KEY`
-  - `FRONTEND_ORIGIN=*`
-  - `NODE_ENV=production`
-
-Ç°¶Ë·¢²¼Ê±Çë×¢Èë£º
-`VITE_API_BASE_URL=https://ai-username-api-v2-234853-9-1330697233.sh.run.tcloudbase.com`
-
-## ÔËÎ¬½¨Òé
-
-- Èç¹û½Ó¿ÚÒì³££¬ÏÈ¼ì²é CloudRun ÊÇ·ñÓĞÔÚÏß°æ±¾Óë½¡¿µÊµÀı¡£
-- ÈôĞè»Ø¹ö£¬ÓÅÏÈ»Ø¹ö CloudRun µ½ÉÏÒ»¿ÉÓÃ°æ±¾£¬ÔÙÖØĞÂ¹¹½¨²¢ÉÏ´«Ç°¶Ë¡£
-- ±ÜÃâ½« API Key Ìá½»µ½²Ö¿â£¬Í³Ò»Ê¹ÓÃ»·¾³±äÁ¿¹ÜÀí¡£
+## æ–‡æ¡£ç´¢å¼•
+- åä½œè§„èŒƒï¼š`AGENTS.md`
+- æŠ€æœ¯æ–‡æ¡£ï¼š`TECHNICAL.md`
+- PRD åŸ‹ç‚¹è¡¨ç»“æ„ï¼š`sql/analytics_schema.sql`

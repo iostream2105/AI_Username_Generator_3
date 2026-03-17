@@ -1,47 +1,47 @@
-# Repository Guidelines
+# 仓库协作指南
 
-## Project Structure & Module Organization
-- `src/`: React + TypeScript frontend.
-- `src/services/ai.ts`: client API wrapper for `/api/generate`.
-- `src/types.ts`: shared frontend type definitions.
-- `server/index.ts`: Express API server and Doubao/OpenAI-compatible integration.
-- `index.html`, `vite.config.ts`, `tsconfig.json`: app entry and toolchain config.
-- `supabase/`: reserved for backend data artifacts (currently minimal/empty).
-- No dedicated `tests/` directory exists yet.
+## 项目结构与模块划分
+- `src/`：前端源码（React + TypeScript）。
+- `src/services/ai.ts`：前端调用 `/api/generate` 的请求层。
+- `server/index.ts`：后端 API 服务，负责调用豆包模型。
+- `cloudfunctions/generateApi/`：可选云函数后端（备用方案）。
+- `sql/`：PRD 第 16 节埋点数据库设计与事件定义。
+- `Dockerfile`、`cloudbaserc.json`：CloudRun 部署相关配置。
 
-## Build, Test, and Development Commands
-- `npm install`: install dependencies.
-- `npm run dev`: start Vite frontend at `http://localhost:3000`.
-- `npm run server`: start Express backend at `http://localhost:3001`.
-- `npm run build`: create production bundle in `dist/`.
-- `npm run preview`: preview production build locally.
-- `npm run lint`: TypeScript type check (`tsc --noEmit`).
-- `npm run clean`: remove `dist/`.
+## 开发与构建命令
+- `npm install`：安装依赖。
+- `npm run dev`：启动前端开发服务（`http://localhost:3000`）。
+- `npm run server`：启动后端服务（`http://localhost:3001`）。
+- `npm run build`：构建前端产物到 `dist/`。
+- `npm run preview`：本地预览构建结果。
+- `npm run lint`：TypeScript 类型检查（`tsc --noEmit`）。
 
-Run frontend and backend together during development (`npm run dev` + `npm run server`).
+## 编码规范
+- 使用 TypeScript 与 React 函数组件。
+- 默认 2 空格缩进。
+- 组件/类型使用 `PascalCase`，变量与函数使用 `camelCase`。
+- 接口入参与出参保持显式类型定义（如 `GenerateParams`、`GeneratedName`）。
+- 修改 `src/App.tsx`、`server/index.ts` 时优先小步提交，避免大范围混改。
 
-## Coding Style & Naming Conventions
-- Language: TypeScript (`.ts`/`.tsx`) with React function components.
-- Indentation: 2 spaces; keep imports grouped and sorted by external/internal when possible.
-- Naming: `PascalCase` for components, `camelCase` for functions/variables, `UPPER_SNAKE_CASE` for constants.
-- Prefer explicit types for API payloads and responses (`GenerateParams`, `GeneratedName`).
-- Use path alias `@` from project root when it improves readability.
+## 测试与验证
+- 当前未配置自动化测试框架。
+- 最低质量门槛：`npm run lint` + 手工验证主链路（首页 -> 生成 -> 结果）。
+- 后端改动需验证 `/api/generate` 的成功与异常路径（400/500）。
 
-## Testing Guidelines
-- No test runner is configured yet. Minimum quality gate is `npm run lint` and manual API/UI verification.
-- When adding tests, use `*.test.ts` or `*.test.tsx` naming and colocate with source or in a new `tests/` folder.
-- For API changes, verify `POST /api/generate` success and failure paths (400/500 handling).
+## 提交与 PR 要求
+- 提交信息建议简洁、动作导向，例如：`修复：处理空关键词请求`。
+- 一个提交尽量只做一类改动，保证可回滚。
+- PR 需包含：
+  - 变更目的与范围
+  - 本地验证步骤与结果
+  - 前端交互改动的截图或录屏
 
-## Commit & Pull Request Guidelines
-- Existing history uses concise Chinese subjects (examples: `�Ż���...`, `�ع���...`, `��ʼ��`).
-- Keep commit messages short, imperative, and scope-first (e.g., `�޸��������չؼ����ύ`).
-- PRs should include:
-  - purpose and key changes,
-  - related issue/task link,
-  - local verification steps (`npm run lint`, manual flow),
-  - UI screenshots/GIFs for frontend changes.
+## 安全与配置
+- 密钥只放在 `.env.local`，不要提交到仓库。
+- 必填密钥：`DOUBAO_API_KEY`。
+- 生产环境前端需配置 `VITE_API_BASE_URL` 指向 CloudRun。
+- 跨域来源由 `FRONTEND_ORIGIN` 控制（后端）。
 
-## Security & Configuration Tips
-- Keep secrets in `.env.local`; never commit real keys.
-- Required backend key: `DOUBAO_API_KEY`.
-- Optional runtime settings should be documented in `.env.example` when introduced.
+## 维护说明
+- 当前仓库仍存在部分历史中文乱码字符串（mojibake），后续修复时请逐步处理并做界面回归验证。
+- `sql/` 中已提供埋点表结构，但运行时代码尚未完整接入埋点写库流程。
