@@ -23,10 +23,8 @@
 - `server/index.ts`：后端入口、CORS、模型调用与业务 API
 - `server/db.ts`：MySQL 连接与数据访问层
 - `cloudfunctions/generateApi/`：云函数版本 API（备用方案）
-- `sql/analytics_schema.sql`：埋点 SQL 表结构
+- `sql/app_schema.sql`：数据库结构 SQL（埋点 + 收藏 + 反馈）
 - `sql/analytics_tracking_design.md`：事件命名与指标映射
-- `sql/favorites_schema.sql`：收藏表结构
-- `sql/user_feedback_schema.sql`：用户反馈表结构
 - `cloudbaserc.json`：CloudBase 环境与云托管服务指向
 
 ## 3. 运行配置

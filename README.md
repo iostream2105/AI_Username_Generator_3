@@ -14,10 +14,8 @@
 - `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
 - `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点 + 用户反馈）
 - `cloudfunctions/generateApi/`：云函数备选实现
-- `sql/analytics_schema.sql`：埋点数据库表结构
+- `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
-- `sql/favorites_schema.sql`：收藏表结构
-- `sql/user_feedback_schema.sql`：用户反馈表结构
 - `Dockerfile`：CloudRun 容器构建配置
 
 ## 本地开发
@@ -108,4 +106,4 @@ npm run preview
 - 协作规范：`AGENTS.md`
 - 技术文档：`TECHNICAL.md`
 - PRD：`PRD.md`
-- 埋点表结构：`sql/analytics_schema.sql`
+- 数据库结构：`sql/app_schema.sql`

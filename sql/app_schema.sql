@@ -1,0 +1,135 @@
+-- 名有意项目数据库结构（合并版）
+-- 包含：埋点表、收藏表、用户反馈表
+
+CREATE TABLE IF NOT EXISTS analytics_event_log (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  event_id VARCHAR(64) NULL COMMENT '事件唯一ID',
+  user_key VARCHAR(128) NOT NULL DEFAULT '' COMMENT '匿名用户标识',
+  session_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '会话标识',
+  event_name VARCHAR(64) NOT NULL COMMENT '事件名称',
+  event_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '事件发生时间',
+  page_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '页面名称',
+  generation_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '生成流程ID',
+  keywords_count TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关键词数量',
+  meaning_tag VARCHAR(32) NOT NULL DEFAULT '' COMMENT '寓意标签',
+  style_tag VARCHAR(32) NOT NULL DEFAULT '' COMMENT '风格标签',
+  result_rank TINYINT UNSIGNED NULL COMMENT '结果序号',
+  result_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '结果名称',
+  is_success TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否成功（1成功，0失败）',
+  latency_ms INT UNSIGNED NULL COMMENT '耗时（毫秒）',
+  error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '错误码',
+  properties JSON NULL COMMENT '扩展属性JSON',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_event_id (event_id),
+  KEY idx_event_name_time (event_name, event_time),
+  KEY idx_event_time (event_time),
+  KEY idx_user_time (user_key, event_time),
+  KEY idx_session_time (session_id, event_time),
+  KEY idx_generation_id (generation_id),
+  KEY idx_meaning_style (meaning_tag, style_tag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件埋点明细表';
+
+CREATE TABLE IF NOT EXISTS analytics_generation_batch (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  generation_id VARCHAR(64) NOT NULL COMMENT '生成流程ID',
+  user_key VARCHAR(128) NOT NULL DEFAULT '' COMMENT '匿名用户标识',
+  session_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '会话标识',
+  keywords_text VARCHAR(255) NOT NULL DEFAULT '' COMMENT '关键词原始文本',
+  keywords_json JSON NULL COMMENT '关键词数组JSON',
+  keywords_count TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关键词数量',
+  meaning_tag VARCHAR(32) NOT NULL DEFAULT '' COMMENT '寓意标签',
+  style_tag VARCHAR(32) NOT NULL DEFAULT '' COMMENT '风格标签',
+  requested_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '请求发起时间',
+  responded_at DATETIME(3) NULL COMMENT '请求响应时间',
+  is_success TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否成功（1成功，0失败）',
+  latency_ms INT UNSIGNED NULL COMMENT '耗时（毫秒）',
+  model_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '模型名称',
+  error_code VARCHAR(64) NOT NULL DEFAULT '' COMMENT '错误码',
+  result_count TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '返回结果数量',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_generation_id (generation_id),
+  KEY idx_requested_at (requested_at),
+  KEY idx_user_requested (user_key, requested_at),
+  KEY idx_success_requested (is_success, requested_at),
+  KEY idx_meaning_style (meaning_tag, style_tag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生成请求批次表';
+
+CREATE TABLE IF NOT EXISTS analytics_generation_result (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  generation_id VARCHAR(64) NOT NULL COMMENT '生成流程ID',
+  result_rank TINYINT UNSIGNED NOT NULL COMMENT '结果序号',
+  result_name VARCHAR(64) NOT NULL COMMENT '结果名称',
+  meaning_title VARCHAR(128) NOT NULL DEFAULT '' COMMENT '寓意标题',
+  meaning_desc VARCHAR(512) NOT NULL DEFAULT '' COMMENT '寓意描述',
+  style_tags_json JSON NULL COMMENT '风格标签JSON',
+  copied_count INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '被复制次数',
+  favorited_count INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '被收藏次数',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_generation_rank (generation_id, result_rank),
+  KEY idx_result_name (result_name),
+  KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生成结果统计表';
+
+CREATE TABLE IF NOT EXISTS analytics_metrics_daily (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  metric_date DATE NOT NULL COMMENT '统计日期',
+  dimension_type VARCHAR(32) NOT NULL DEFAULT 'global' COMMENT '维度类型',
+  dimension_value VARCHAR(64) NOT NULL DEFAULT 'all' COMMENT '维度值',
+  home_exposure_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '首页曝光PV',
+  click_generate_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '点击生成PV',
+  generate_success_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '生成成功PV',
+  result_page_dwell_avg_sec DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '结果页平均停留秒数',
+  copy_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '复制PV',
+  favorite_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '收藏PV',
+  regenerate_pv BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '换一批PV',
+  second_generate_user_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '二次生成用户数',
+  next_day_retained_user_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '次日留存用户数',
+  day7_retained_user_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '7日留存用户数',
+  favorite_return_user_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '收藏回访用户数',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_date_dimension (metric_date, dimension_type, dimension_value),
+  KEY idx_metric_date (metric_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='每日指标汇总表';
+
+CREATE TABLE IF NOT EXISTS user_favorite_name (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  user_key VARCHAR(128) NOT NULL DEFAULT '' COMMENT '匿名用户标识',
+  name VARCHAR(64) NOT NULL COMMENT '收藏网名',
+  meaning_title VARCHAR(128) NOT NULL DEFAULT '' COMMENT '寓意标题',
+  meaning_desc VARCHAR(512) NOT NULL DEFAULT '' COMMENT '寓意描述',
+  style_tags_json JSON NULL COMMENT '风格标签JSON',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_name (user_key, name),
+  KEY idx_user_created (user_key, created_at),
+  KEY idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏网名表';
+
+CREATE TABLE IF NOT EXISTS user_feedback (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  user_key VARCHAR(128) NOT NULL DEFAULT '' COMMENT '匿名用户标识',
+  session_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '会话标识',
+  feedback_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '反馈类型（satisfaction/general）',
+  satisfaction_value VARCHAR(32) NOT NULL DEFAULT '' COMMENT '满意度（satisfied/unsatisfied）',
+  reason_tag VARCHAR(64) NOT NULL DEFAULT '' COMMENT '不满意原因标签',
+  content VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '反馈内容',
+  page_name VARCHAR(64) NOT NULL DEFAULT '' COMMENT '反馈来源页面',
+  generation_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '生成流程ID',
+  _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  KEY idx_user_time (user_key, created_at),
+  KEY idx_type_time (feedback_type, created_at),
+  KEY idx_generation_id (generation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户反馈表';
