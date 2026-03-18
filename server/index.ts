@@ -23,11 +23,30 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+
+function isPrivateNetworkOrigin(origin: string) {
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes("*") ||
+        allowedOrigins.includes(origin) ||
+        (!isProduction && isPrivateNetworkOrigin(origin))
+      ) {
         callback(null, true);
         return;
       }
