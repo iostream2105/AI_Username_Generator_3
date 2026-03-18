@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X } from 'lucide-react';
-import { addFavorite, fetchFavorites, generateNames, removeFavorite, trackEvent } from './services/ai';
+import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X, MessageSquare } from 'lucide-react';
+import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
 import { GeneratedName, GenerateParams } from './types';
 
 const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
 const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
+const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
 
@@ -102,6 +103,12 @@ export default function App() {
   const [userKey] = useState<string>(() => getOrCreateUserKey());
   const [sessionId] = useState<string>(() => getOrCreateSessionKey());
   const [currentGenerationId, setCurrentGenerationId] = useState<string>('');
+  const [satisfactionStatus, setSatisfactionStatus] = useState<'idle' | 'unsatisfied_selecting' | 'satisfied' | 'unsatisfied_submitted'>('idle');
+  const [satisfactionSubmitting, setSatisfactionSubmitting] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fireTrack = (eventName: string, payload: Partial<{
     page_name: string;
@@ -171,6 +178,7 @@ export default function App() {
 
     const generationId = createGenerationId();
     setCurrentGenerationId(generationId);
+    setSatisfactionStatus('idle');
     
     setView('loading');
     try {
@@ -198,6 +206,54 @@ export default function App() {
       console.error("Generation failed", error);
       alert("生成失败，请稍后重试");
       setView('home');
+    }
+  };
+
+  const submitSatisfaction = async (satisfactionValue: 'satisfied' | 'unsatisfied', reasonTag = '') => {
+    if (satisfactionSubmitting) return;
+    setSatisfactionSubmitting(true);
+    try {
+      await submitFeedback({
+        userKey,
+        sessionId,
+        feedbackType: 'satisfaction',
+        satisfactionValue,
+        reasonTag,
+        pageName: 'results',
+        generationId: currentGenerationId,
+      });
+      setSatisfactionStatus(satisfactionValue === 'satisfied' ? 'satisfied' : 'unsatisfied_submitted');
+    } catch (e) {
+      console.error('Submit satisfaction failed', e);
+      alert('反馈提交失败，请稍后重试');
+    } finally {
+      setSatisfactionSubmitting(false);
+    }
+  };
+
+  const submitGeneralFeedback = async () => {
+    const text = feedbackText.trim();
+    if (!text || feedbackSubmitting) return;
+    setFeedbackSubmitting(true);
+    try {
+      await submitFeedback({
+        userKey,
+        sessionId,
+        feedbackType: 'general',
+        content: text,
+        pageName: view,
+        generationId: currentGenerationId || '',
+      });
+      setFeedbackText('');
+      setFeedbackModalOpen(false);
+      setFeedbackNotice({ type: 'success', text: '感谢反馈，我们已收到你的建议。' });
+      setTimeout(() => setFeedbackNotice(null), 2200);
+    } catch (e) {
+      console.error('Submit general feedback failed', e);
+      setFeedbackNotice({ type: 'error', text: '反馈提交失败，请稍后重试。' });
+      setTimeout(() => setFeedbackNotice(null), 2200);
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
   
@@ -492,6 +548,56 @@ export default function App() {
                 {results.map(renderCard)}
               </div>
 
+              <div className="mt-6 bg-white rounded-2xl p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
+                <p className="text-sm text-brand-900 mb-3 font-medium">这组名字你满意吗？</p>
+                {satisfactionStatus === 'idle' && (
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => void submitSatisfaction('satisfied')}
+                        disabled={satisfactionSubmitting}
+                        className="flex-1 bg-brand-50 text-brand-900 rounded-xl py-2.5 text-sm hover:bg-brand-100 transition-colors disabled:opacity-50"
+                      >
+                        满意
+                      </button>
+                      <button
+                        onClick={() => setSatisfactionStatus('unsatisfied_selecting')}
+                        disabled={satisfactionSubmitting}
+                        className="flex-1 bg-brand-50 text-brand-900 rounded-xl py-2.5 text-sm hover:bg-brand-100 transition-colors disabled:opacity-50"
+                      >
+                        不满意
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {satisfactionStatus === 'unsatisfied_selecting' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-brand-800/70">告诉我们原因，帮助我们做得更好：</p>
+                    <div className="flex flex-wrap gap-2">
+                      {UNSATISFIED_REASONS.map((reason) => (
+                        <button
+                          key={reason}
+                          onClick={() => void submitSatisfaction('unsatisfied', reason)}
+                          disabled={satisfactionSubmitting}
+                          className="text-xs px-3 py-1.5 rounded-full bg-brand-50 text-brand-900 hover:bg-brand-100 transition-colors disabled:opacity-50"
+                        >
+                          {reason}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {satisfactionStatus === 'satisfied' && (
+                  <p className="text-sm text-emerald-600">收到，谢谢你的肯定。</p>
+                )}
+
+                {satisfactionStatus === 'unsatisfied_submitted' && (
+                  <p className="text-sm text-brand-800/80">已收到你的反馈，我们会继续优化。</p>
+                )}
+              </div>
+
               <div className="mt-8 flex gap-4">
                 <button
                   onClick={() => {
@@ -558,6 +664,73 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <button
+        onClick={() => setFeedbackModalOpen(true)}
+        className="fixed right-6 bottom-8 z-20 bg-[#5A5A40] text-white px-4 py-2.5 rounded-full shadow-lg shadow-[#5A5A40]/20 flex items-center gap-2 text-sm"
+      >
+        <MessageSquare size={16} />
+        意见反馈
+      </button>
+
+      <AnimatePresence>
+        {feedbackModalOpen && (
+          <>
+            <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setFeedbackModalOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed z-40 left-4 right-4 bottom-6 bg-white rounded-2xl p-4 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-brand-900">意见反馈</p>
+                <button onClick={() => setFeedbackModalOpen(false)} className="p-1 text-brand-800/60">
+                  <X size={16} />
+                </button>
+              </div>
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="告诉我们你的建议或遇到的问题..."
+                className="w-full min-h-[110px] rounded-xl border border-brand-900/10 p-3 text-sm outline-none focus:ring-2 focus:ring-brand-800/20 resize-none"
+              />
+              <div className="mt-3 flex gap-3">
+                <button
+                  onClick={() => setFeedbackModalOpen(false)}
+                  className="flex-1 bg-brand-50 text-brand-900 rounded-xl py-2.5 text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => void submitGeneralFeedback()}
+                  disabled={!feedbackText.trim() || feedbackSubmitting}
+                  className="flex-1 bg-[#5A5A40] text-white rounded-xl py-2.5 text-sm disabled:opacity-50"
+                >
+                  提交
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {feedbackNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className={`fixed left-1/2 -translate-x-1/2 bottom-24 z-50 px-4 py-2.5 rounded-full text-sm shadow-lg ${
+              feedbackNotice.type === 'success'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-rose-600 text-white'
+            }`}
+          >
+            {feedbackNotice.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

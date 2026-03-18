@@ -33,6 +33,17 @@ export interface TrackEventPayload {
   properties?: Record<string, unknown>;
 }
 
+export interface FeedbackPayload {
+  userKey: string;
+  sessionId: string;
+  feedbackType: "satisfaction" | "general";
+  satisfactionValue?: "satisfied" | "unsatisfied";
+  reasonTag?: string;
+  content?: string;
+  pageName?: string;
+  generationId?: string;
+}
+
 export async function generateNames(params: GenerateParams): Promise<GenerateApiResponse> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/generate`, {
@@ -95,5 +106,18 @@ export async function trackEvent(payload: TrackEventPayload): Promise<void> {
 
   if (!response.ok) {
     throw new Error(`Track event error: ${response.status}`);
+  }
+}
+
+export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
+  const apiBase = getApiBase();
+  const response = await fetch(`${apiBase}/api/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Feedback submit error: ${response.status}`);
   }
 }

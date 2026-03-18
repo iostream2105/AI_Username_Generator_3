@@ -7,6 +7,7 @@ import {
   deleteFavorite,
   finishGenerationBatch,
   initDb,
+  insertUserFeedback,
   insertAnalyticsEvent,
   isDbReady,
   listFavorites,
@@ -83,6 +84,17 @@ interface TrackEventBody {
   latency_ms?: number;
   error_code?: string;
   properties?: Record<string, unknown>;
+}
+
+interface FeedbackBody {
+  userKey?: string;
+  sessionId?: string;
+  feedbackType?: "satisfaction" | "general";
+  satisfactionValue?: "satisfied" | "unsatisfied";
+  reasonTag?: string;
+  content?: string;
+  pageName?: string;
+  generationId?: string;
 }
 
 interface NameItem {
@@ -452,6 +464,47 @@ app.post("/api/track", async (req, res) => {
   } catch (e: any) {
     console.error("Track event failed:", e.message);
     res.status(500).json({ error: "Track event failed" });
+  }
+});
+
+app.post("/api/feedback", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+
+  const body = req.body as FeedbackBody;
+  if (!body?.userKey || !body?.sessionId || !body?.feedbackType) {
+    res.status(400).json({ error: "userKey, sessionId and feedbackType are required" });
+    return;
+  }
+
+  if (body.feedbackType === "satisfaction" && !body.satisfactionValue) {
+    res.status(400).json({ error: "satisfactionValue is required for satisfaction feedback" });
+    return;
+  }
+
+  if (body.feedbackType === "general" && !String(body.content || "").trim()) {
+    res.status(400).json({ error: "content is required for general feedback" });
+    return;
+  }
+
+  try {
+    await insertUserFeedback({
+      userKey: body.userKey,
+      sessionId: body.sessionId,
+      feedbackType: body.feedbackType,
+      satisfactionValue: body.satisfactionValue,
+      reasonTag: body.reasonTag || "",
+      content: String(body.content || "").trim(),
+      pageName: body.pageName || "",
+      generationId: body.generationId || "",
+    });
+
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("Save feedback failed:", e.message);
+    res.status(500).json({ error: "Save feedback failed" });
   }
 });
 

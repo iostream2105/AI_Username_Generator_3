@@ -62,6 +62,17 @@ export interface GenerationResultRecord {
   styleTags: string[];
 }
 
+export interface UserFeedbackRecord {
+  userKey: string;
+  sessionId: string;
+  feedbackType: "satisfaction" | "general";
+  satisfactionValue?: "satisfied" | "unsatisfied";
+  reasonTag?: string;
+  content?: string;
+  pageName?: string;
+  generationId?: string;
+}
+
 let pool: Pool | null = null;
 
 function resolveDbConfig() {
@@ -352,6 +363,37 @@ export async function bumpGenerationResultCounter(
       WHERE generation_id = ? AND result_rank = ?
     `,
     [generationId, resultRank]
+  );
+}
+
+export async function insertUserFeedback(record: UserFeedbackRecord) {
+  if (!pool) {
+    throw new Error("DB is not initialized");
+  }
+
+  await pool.query(
+    `
+      INSERT INTO user_feedback (
+        user_key,
+        session_id,
+        feedback_type,
+        satisfaction_value,
+        reason_tag,
+        content,
+        page_name,
+        generation_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      record.userKey || "",
+      record.sessionId || "",
+      record.feedbackType,
+      record.satisfactionValue || "",
+      record.reasonTag || "",
+      record.content || "",
+      record.pageName || "",
+      record.generationId || "",
+    ]
   );
 }
 
