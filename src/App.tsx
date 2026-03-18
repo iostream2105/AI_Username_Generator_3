@@ -12,6 +12,7 @@ const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
+const LOADING_STAGE_TEXTS = ['正在理解关键词...','正在为你寻找灵感...', '正在创作...', '正在润色...'];
 
 function createLocalId() {
   return Math.random().toString(36).substring(2, 10);
@@ -114,6 +115,7 @@ export default function App() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [loadingStageIndex, setLoadingStageIndex] = useState(0);
 
   // 统一视图切换：同步 React 视图与浏览器 history，保障系统返回键可按层级回退
   const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
@@ -195,6 +197,20 @@ export default function App() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  // 生成加载态分阶段提示：降低用户“卡住不动”的等待焦虑
+  useEffect(() => {
+    if (view !== 'loading') {
+      setLoadingStageIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setLoadingStageIndex((prev) => Math.min(prev + 1, LOADING_STAGE_TEXTS.length - 1));
+    }, 2200);
+
+    return () => window.clearInterval(timer);
+  }, [view]);
   
   // 启动时从后端拉取收藏，保持多端刷新后状态一致
   useEffect(() => {
@@ -239,6 +255,7 @@ export default function App() {
     const generationId = createGenerationId();
     setCurrentGenerationId(generationId);
     setSatisfactionStatus('idle');
+    setLoadingStageIndex(0);
     
     setView('loading');
     try {
@@ -596,7 +613,7 @@ export default function App() {
               className="flex flex-col items-center justify-center h-[60vh]"
             >
               <div className="w-16 h-16 border-4 border-brand-800/20 border-t-brand-800 rounded-full animate-spin mb-6"></div>
-              <p className="font-serif text-brand-900 text-lg">正在为你寻找灵感...</p>
+              <p className="font-serif text-brand-900 text-lg">{LOADING_STAGE_TEXTS[loadingStageIndex]}</p>
               <p className="text-brand-800/50 text-sm mt-2">这可能需要几秒钟</p>
             </motion.div>
           )}

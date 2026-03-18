@@ -11,10 +11,11 @@
 主流程：
 1. 用户输入关键词（可选寓意和风格）
 2. 前端调用 `POST /api/generate`，并携带 `userKey/sessionId/generationId`
-3. 后端调用豆包模型，返回结构化网名结果
-4. 后端写入生成相关埋点表（`analytics_generation_batch`、`analytics_generation_result`、`analytics_event_log`）
-5. 前端在交互节点调用 `POST /api/track` 上报埋点事件
-6. 前端通过 `POST /api/feedback` 提交满意度与建议反馈
+3. 后端调用豆包模型（`doubao-seed-1-8-251228`），使用 `json_schema` 约束结构化输出
+4. 若首次解析失败，后端使用更严格提示词做一次二次重试（不再使用本地兜底）
+5. 后端写入生成相关埋点表（`analytics_generation_batch`、`analytics_generation_result`、`analytics_event_log`）
+6. 前端在交互节点调用 `POST /api/track` 上报埋点事件
+7. 前端通过 `POST /api/feedback` 提交满意度与建议反馈
 
 ## 2. 目录说明
 - `src/App.tsx`：前端主页面、状态管理、埋点触发、反馈交互与移动端返回逻辑
@@ -78,7 +79,13 @@
 状态码：
 - `400`：缺少关键词
 - `503`：数据库未配置
-- `500`：模型调用失败或解析失败
+- `500`：模型调用失败，或首次+二次重试后仍解析失败
+
+生成接口实现要点：
+- 当前模型：`doubao-seed-1-8-251228`
+- 使用 `response_format: json_schema` + `strict: true`
+- 成功事件中 `properties.parse_retry` 标识是否触发过二次重试
+- `properties.fallback_used` 当前固定为 `false`（本地兜底逻辑已移除）
 
 ### `POST /api/track`
 用于写入 `analytics_event_log`，支持事件：

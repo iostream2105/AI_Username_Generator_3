@@ -57,7 +57,7 @@ app.use(
 );
 app.use(express.json());
 
-const MODEL_NAME = "doubao-seed-2-0-pro-260215";
+const MODEL_NAME = "doubao-seed-1-8-251228";
 
 const client = new OpenAI({
   apiKey: process.env.DOUBAO_API_KEY,
@@ -124,6 +124,34 @@ interface NameItem {
   style_tags: string[];
 }
 
+// 使用 JSON Schema 约束模型输出，降低非结构化返回概率
+const NAME_ITEMS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items"],
+  properties: {
+    items: {
+      type: "array",
+      minItems: 3,
+      maxItems: 3,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "meaning_title", "meaning_desc", "style_tags"],
+        properties: {
+          name: { type: "string" },
+          meaning_title: { type: "string" },
+          meaning_desc: { type: "string" },
+          style_tags: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+};
+
 // 生成简单随机 ID，用于事件ID/生成ID 等链路关联
 function createEventId(prefix = "evt") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -137,11 +165,9 @@ function splitKeywords(raw: string) {
     .filter(Boolean);
 }
 
-// 解析前做轻度清洗：中文引号、尾逗号等常见 JSON 污点
+// 解析前做轻度清洗：仅处理尾逗号等常见 JSON 污点，避免篡改字符串内容
 function safeJsonParse(raw: string): unknown {
   const normalized = raw
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
     .replace(/,\s*([}\]])/g, "$1");
   return JSON.parse(normalized);
 }
@@ -197,33 +223,25 @@ function parseNameItems(text: string): NameItem[] {
   throw new Error("INVALID_MODEL_JSON");
 }
 
-// 当模型连续返回非结构化结果时的兜底输出，避免前端直接报错
-function buildFallbackItems(keywordList: string[], meaning?: string, style?: string): NameItem[] {
-  const base = keywordList.length > 0 ? keywordList[0] : "星";
-  const second = keywordList.length > 1 ? keywordList[1] : "海";
-  const styleTag = style || "简约";
-  const meaningText = meaning || "自由";
+function normalizeNameItems(raw: any): NameItem[] {
+  if (!Array.isArray(raw)) {
+    throw new Error("INVALID_MODEL_JSON");
+  }
 
-  return [
-    {
-      name: `${base}见`,
-      meaning_title: `${meaningText}感`,
-      meaning_desc: `用“${base}”承载你的关键词记忆，整体表达克制且有留白感。`,
-      style_tags: [styleTag, "简约"],
-    },
-    {
-      name: `${second}未眠`,
-      meaning_title: `${meaningText}与生命力`,
-      meaning_desc: `在“${second}”的意象上加入情绪张力，适合安静但有力量的表达。`,
-      style_tags: [styleTag, "文艺"],
-    },
-    {
-      name: `${base}${second}`,
-      meaning_title: `${meaningText}与流动感`,
-      meaning_desc: `融合关键词核心意象，短促好记，适合日常社交昵称使用。`,
-      style_tags: [styleTag, "清冷"],
-    },
-  ];
+  const normalizedItems = raw
+    .map((item: any) => ({
+      name: String(item?.name || "").trim(),
+      meaning_title: String(item?.meaning_title || "").trim(),
+      meaning_desc: String(item?.meaning_desc || "").trim(),
+      style_tags: Array.isArray(item?.style_tags) ? item.style_tags.map((x: unknown) => String(x)) : [],
+    }))
+    .filter((item: NameItem) => item.name.length > 0);
+
+  if (normalizedItems.length === 0) {
+    throw new Error("INVALID_MODEL_JSON");
+  }
+
+  return normalizedItems.slice(0, 3);
 }
 
 // 埋点/统计写库的安全包装：失败只记日志，不阻断主业务流程
@@ -242,6 +260,14 @@ async function requestModelContent(prompt: string, temperature = 0.8): Promise<s
     model: MODEL_NAME,
     messages: [{ role: "user", content: prompt }],
     temperature,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "name_items_response",
+        schema: NAME_ITEMS_SCHEMA as any,
+        strict: true,
+      },
+    } as any,
     thinking: { type: "disabled" },
   } as any);
 
@@ -280,15 +306,17 @@ app.post("/api/generate", async (req, res) => {
 3. 避免低俗、土味、营销号感。
 4. 名字要符合用户的关键词，并结合期望寓意和风格进行升华。
 
-请严格按照以下 JSON 数组格式返回，不要包含任何其他文字：
-[
-  {
-    "name": "网名",
-    "meaning_title": "寓意标题（如：自由与成长感）",
-    "meaning_desc": "一句话寓意解释（解释名字由哪些意象和情绪构成，以及适合什么表达）",
-    "style_tags": ["风格标签1", "风格标签2"]
-  }
-]`;
+请严格返回 JSON 对象，格式如下，不要包含任何其他文字：
+{
+  "items": [
+    {
+      "name": "网名",
+      "meaning_title": "寓意标题（如：自由与成长感）",
+      "meaning_desc": "一句话寓意解释（解释名字由哪些意象和情绪构成，以及适合什么表达）",
+      "style_tags": ["风格标签1", "风格标签2"]
+    }
+  ]
+}`;
 
   try {
     await safeTrack(
@@ -324,31 +352,37 @@ app.post("/api/generate", async (req, res) => {
       "insert click_generate"
     );
 
-    // 优先模型结构化输出 -> 失败后严格提示重试 -> 再失败走本地兜底
+    // 优先模型结构化输出，若解析失败则二次重试一次（严格格式约束）
     let items: NameItem[] = [];
     let parseRetry = false;
-    let fallbackUsed = false;
 
     try {
       const text = await requestModelContent(prompt, 0.8);
-      items = parseNameItems(text);
+      try {
+        const parsed = safeJsonParse(text) as any;
+        items = normalizeNameItems(parsed?.items);
+      } catch (parseError) {
+        if ((parseError as Error)?.message !== "INVALID_MODEL_JSON") {
+          throw parseError;
+        }
+        items = parseNameItems(text);
+      }
     } catch (e: any) {
       if (e?.message !== "INVALID_MODEL_JSON") {
         throw e;
       }
-
       parseRetry = true;
-      const strictPrompt = `${prompt}\n\n再次强调：必须只返回合法 JSON 数组，不要 markdown，不要解释，不要额外文本。`;
+      const strictPrompt = `${prompt}\n\n再次强调：必须只返回符合给定 JSON Schema 的合法 JSON 对象，不要 markdown，不要解释，不要额外文本。`;
 
+      const retryText = await requestModelContent(strictPrompt, 0.5);
       try {
-        const retryText = await requestModelContent(strictPrompt, 0.5);
-        items = parseNameItems(retryText);
-      } catch (retryErr: any) {
-        if (retryErr?.message !== "INVALID_MODEL_JSON") {
-          throw retryErr;
+        const retryParsed = safeJsonParse(retryText) as any;
+        items = normalizeNameItems(retryParsed?.items);
+      } catch (retryParseError) {
+        if ((retryParseError as Error)?.message !== "INVALID_MODEL_JSON") {
+          throw retryParseError;
         }
-        fallbackUsed = true;
-        items = buildFallbackItems(keywordList, meaning, style);
+        items = parseNameItems(retryText);
       }
     }
 
@@ -397,7 +431,7 @@ app.post("/api/generate", async (req, res) => {
           properties: {
             result_count: items.length,
             parse_retry: parseRetry,
-            fallback_used: fallbackUsed,
+            fallback_used: false,
           },
         }),
       "insert generate_success"
