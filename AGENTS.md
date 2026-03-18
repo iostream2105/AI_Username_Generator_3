@@ -1,5 +1,10 @@
 # 仓库协作指南
 
+## Agent 强制约定
+- 以中文回复我。
+- 执行命令时优先使用 CMD，CMD 用不了时再使用 PowerShell。
+- 所有文件编码统一使用 UTF-8。
+
 ## 项目结构与模块划分
 - `src/`：前端源码（React + TypeScript）。
 - `src/services/ai.ts`：前端调用 `/api/generate` 的请求层。
