@@ -7,10 +7,12 @@
 
 ## 项目结构与模块划分
 - `src/`：前端源码（React + TypeScript）。
-- `src/services/ai.ts`：前端调用 `/api/generate` 的请求层。
-- `server/index.ts`：后端 API 服务，负责调用豆包模型。
+- `src/services/ai.ts`：前端 API 请求层（生成、埋点、收藏、反馈）。
+- `server/index.ts`：后端 API 服务（豆包生成、埋点、收藏、反馈）。
+- `server/db.ts`：MySQL 数据访问层（埋点/收藏/反馈）。
 - `cloudfunctions/generateApi/`：可选云函数后端（备用方案）。
-- `sql/`：PRD 第 16 节埋点数据库设计与事件定义。
+- `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）。
+- `sql/analytics_tracking_design.md`：埋点事件定义与指标映射。
 - `Dockerfile`、`cloudbaserc.json`：CloudRun 部署相关配置。
 
 ## 开发与构建命令
@@ -31,7 +33,8 @@
 ## 测试与验证
 - 当前未配置自动化测试框架。
 - 最低质量门槛：`npm run lint` + 手工验证主链路（首页 -> 生成 -> 结果）。
-- 后端改动需验证 `/api/generate` 的成功与异常路径（400/500）。
+- 后端改动需验证 `/api/generate`、`/api/track`、`/api/favorites`、`/api/feedback` 的成功与异常路径（400/500/503）。
+- 移动端联调时需验证：系统返回键按页面层级回退（而非直接退出页面）。
 
 ## 提交与 PR 要求
 - 提交消息用中文描述。
@@ -45,9 +48,11 @@
 ## 安全与配置
 - 密钥只放在 `.env.local`，不要提交到仓库。
 - 必填密钥：`DOUBAO_API_KEY`。
+- MySQL 连接需配置：`DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`（或 `DB_URL`）。
 - 生产环境前端需配置 `VITE_API_BASE_URL` 指向 CloudRun。
 - 跨域来源由 `FRONTEND_ORIGIN` 控制（后端）。
+- 开发环境后端已放行局域网私网来源用于手机调试；生产环境仍按 `FRONTEND_ORIGIN` 严格校验。
 
 ## 维护说明
 - 当前仓库仍存在部分历史中文乱码字符串（mojibake），后续修复时请逐步处理并做界面回归验证。
-- `sql/` 中已提供埋点表结构，但运行时代码尚未完整接入埋点写库流程。
+- 运行时代码已接入埋点、收藏、反馈写库；`analytics_metrics_daily` 仍需离线聚合任务补齐。
