@@ -324,7 +324,7 @@ export default function App() {
       {/* Header */}
       <header className="px-6 py-4 flex justify-between items-center z-10">
         <div className="font-serif font-medium text-lg tracking-wide text-brand-900">
-          AI寓意网名
+          名有意
         </div>
         <button 
           onClick={() => setView('favorites')}
@@ -376,12 +376,12 @@ export default function App() {
                         onChange={(e) => setKeywordInput(e.target.value)}
                         onKeyDown={handleKeywordKeyDown}
                         onBlur={addKeyword}
-                        placeholder={keywords.length === 0 ? "输入后按空格或回车添加 (如: 月亮)" : "继续输入..."}
+                        placeholder={keywords.length === 0 ? "输入后按空格或回车添加" : "继续输入..."}
                         className="flex-1 bg-transparent border-none outline-none text-brand-900 placeholder:text-brand-800/30 min-w-[120px] text-sm"
                       />
                     )}
                   </div>
-                  <p className="text-xs text-brand-800/50">可输入姓名缩写、生日月份、喜欢的数字、事物、颜色等等你想要融入的元素</p>
+                  <p className="text-xs text-brand-800/50">可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素</p>
                 </div>
 
                 {/* Meaning & Style Dropdowns */}
@@ -429,20 +429,20 @@ export default function App() {
                 <div className="space-y-3">
                   <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
                     <div className="flex justify-between items-end mb-2">
-                      <div className="font-serif text-lg text-brand-900">屿白</div>
-                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">岛屿、白色、平静</div>
+                      <div className="font-serif text-lg text-brand-900">仲阶闻</div>
+                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">zjw、8月</div>
                     </div>
                     <p className="text-xs text-brand-800/70 leading-relaxed">
-                      <span className="font-medium text-brand-900">孤独中的纯粹：</span>将“岛屿”的独立与“白色”的纯净结合，象征在喧嚣中保持内心的宁静与清醒。
+                      <span className="font-medium text-brand-900">仲月清韵感：</span>取zjw的首字母谐音，“仲”对应8月作为仲夏之末的时序，阶前听风落桂的闲静意象，适配喜欢松弛氛围感的表达
                     </p>
                   </div>
                   <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
                     <div className="flex justify-between items-end mb-2">
-                      <div className="font-serif text-lg text-brand-900">知南</div>
-                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">ZN、南方、温暖</div>
+                      <div className="font-serif text-lg text-brand-900">知年桂</div>
+                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">ZN、桂花、温柔</div>
                     </div>
                     <p className="text-xs text-brand-800/70 leading-relaxed">
-                      <span className="font-medium text-brand-900">向阳而生的温柔：</span>巧妙融入姓名缩写ZN，借“南方”传达出温暖和煦的气质，适合温柔且坚定的人。
+                      <span className="font-medium text-brand-900">岁时桂香的温柔沉淀：</span>“zn”谐音“知年”，桂花开落知年岁，每年如约而至的桂香藏着时光沉淀的柔和感，很适合喜欢沉静温柔气质的用户
                     </p>
                   </div>
                 </div>
