@@ -25,6 +25,7 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
   .filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
 
+// 开发环境放行私网来源，便于手机同局域网调试；生产仍按白名单校验
 function isPrivateNetworkOrigin(origin: string) {
   try {
     const { hostname } = new URL(origin);
@@ -123,10 +124,12 @@ interface NameItem {
   style_tags: string[];
 }
 
+// 生成简单随机 ID，用于事件ID/生成ID 等链路关联
 function createEventId(prefix = "evt") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// 将关键词字符串拆分为数组，统一逗号/空格/中文顿号等分隔符
 function splitKeywords(raw: string) {
   return raw
     .split(/[,\s，、]+/)
@@ -134,6 +137,7 @@ function splitKeywords(raw: string) {
     .filter(Boolean);
 }
 
+// 解析前做轻度清洗：中文引号、尾逗号等常见 JSON 污点
 function safeJsonParse(raw: string): unknown {
   const normalized = raw
     .replace(/[\u201C\u201D]/g, '"')
@@ -142,6 +146,7 @@ function safeJsonParse(raw: string): unknown {
   return JSON.parse(normalized);
 }
 
+// 模型响应容错解析：支持纯 JSON、代码块 JSON、文本中数组片段
 function parseNameItems(text: string): NameItem[] {
   const trimmed = String(text || "").trim();
   const candidates: string[] = [];
@@ -192,6 +197,7 @@ function parseNameItems(text: string): NameItem[] {
   throw new Error("INVALID_MODEL_JSON");
 }
 
+// 当模型连续返回非结构化结果时的兜底输出，避免前端直接报错
 function buildFallbackItems(keywordList: string[], meaning?: string, style?: string): NameItem[] {
   const base = keywordList.length > 0 ? keywordList[0] : "星";
   const second = keywordList.length > 1 ? keywordList[1] : "海";
@@ -220,6 +226,7 @@ function buildFallbackItems(keywordList: string[], meaning?: string, style?: str
   ];
 }
 
+// 埋点/统计写库的安全包装：失败只记日志，不阻断主业务流程
 async function safeTrack(task: () => Promise<void>, label: string) {
   if (!isDbReady()) return;
   try {
@@ -229,6 +236,7 @@ async function safeTrack(task: () => Promise<void>, label: string) {
   }
 }
 
+// 封装模型请求，便于主流程做重试与降级
 async function requestModelContent(prompt: string, temperature = 0.8): Promise<string> {
   const completion = await client.chat.completions.create({
     model: MODEL_NAME,
@@ -316,6 +324,7 @@ app.post("/api/generate", async (req, res) => {
       "insert click_generate"
     );
 
+    // 优先模型结构化输出 -> 失败后严格提示重试 -> 再失败走本地兜底
     let items: NameItem[] = [];
     let parseRetry = false;
     let fallbackUsed = false;
@@ -394,6 +403,7 @@ app.post("/api/generate", async (req, res) => {
       "insert generate_success"
     );
 
+    // 前端依赖 generation_id 关联收藏、反馈与埋点
     res.json({ generation_id: resolvedGenerationId, items });
   } catch (e: any) {
     console.error("AI generation failed:", e.message);
@@ -466,6 +476,7 @@ app.post("/api/track", async (req, res) => {
       properties: body.properties,
     });
 
+    // 复制/收藏事件会同步回填到生成结果计数表
     if (
       body.generation_id &&
       typeof body.result_rank === "number" &&
@@ -498,11 +509,13 @@ app.post("/api/feedback", async (req, res) => {
     return;
   }
 
+  // 满意度反馈必须包含满意状态
   if (body.feedbackType === "satisfaction" && !body.satisfactionValue) {
     res.status(400).json({ error: "satisfactionValue is required for satisfaction feedback" });
     return;
   }
 
+  // 通用建议反馈必须包含内容
   if (body.feedbackType === "general" && !String(body.content || "").trim()) {
     res.status(400).json({ error: "content is required for general feedback" });
     return;

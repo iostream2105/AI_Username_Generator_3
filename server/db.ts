@@ -75,6 +75,7 @@ export interface UserFeedbackRecord {
 
 let pool: Pool | null = null;
 
+// 支持两种配置方式：单连接串（DB_URL/MYSQL_URL）或拆分字段
 function resolveDbConfig() {
   const connectionUri = process.env.DB_URL || process.env.MYSQL_URL;
   if (connectionUri) {
@@ -123,6 +124,7 @@ export function isDbReady() {
   return Boolean(pool);
 }
 
+// 查询用户收藏列表（按创建时间倒序）
 export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -150,6 +152,7 @@ export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
   }));
 }
 
+// 收藏写入采用 upsert，避免同一用户同名收藏重复
 export async function upsertFavorite(record: FavoriteRecord) {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -194,6 +197,7 @@ export async function deleteFavorite(userKey: string, name: string) {
   );
 }
 
+// 通用事件埋点写入（analytics_event_log）
 export async function insertAnalyticsEvent(record: TrackEventRecord) {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -239,6 +243,7 @@ export async function insertAnalyticsEvent(record: TrackEventRecord) {
   );
 }
 
+// 生成批次开始记录（若 generation_id 已存在则更新）
 export async function upsertGenerationBatchStart(record: GenerationBatchStartRecord) {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -287,6 +292,7 @@ export async function upsertGenerationBatchStart(record: GenerationBatchStartRec
   );
 }
 
+// 生成批次结束记录（成功/失败统一更新）
 export async function finishGenerationBatch(record: GenerationBatchFinishRecord) {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -313,6 +319,7 @@ export async function finishGenerationBatch(record: GenerationBatchFinishRecord)
   );
 }
 
+// 批量写入生成结果（按 generation_id + result_rank 幂等更新）
 export async function upsertGenerationResults(results: GenerationResultRecord[]) {
   if (!pool || results.length === 0) {
     return;
@@ -347,6 +354,7 @@ export async function upsertGenerationResults(results: GenerationResultRecord[])
   }
 }
 
+// 回填单条结果统计计数（复制/收藏）
 export async function bumpGenerationResultCounter(
   generationId: string,
   resultRank: number,
@@ -366,6 +374,7 @@ export async function bumpGenerationResultCounter(
   );
 }
 
+// 用户反馈入库（满意度与意见反馈共用）
 export async function insertUserFeedback(record: UserFeedbackRecord) {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -397,6 +406,7 @@ export async function insertUserFeedback(record: UserFeedbackRecord) {
   );
 }
 
+// 兼容 MySQL JSON 字段在不同驱动返回类型下的解析差异
 function parseStyleTags(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map(String);

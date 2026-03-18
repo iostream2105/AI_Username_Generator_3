@@ -43,6 +43,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="relative">
+      {/* 触发器按钮：展示当前值或占位文案 */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -57,6 +58,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
       <AnimatePresence>
         {isOpen && (
           <>
+            {/* 点击遮罩关闭下拉 */}
             <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -113,6 +115,7 @@ export default function App() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // 统一视图切换：同步 React 视图与浏览器 history，保障系统返回键可按层级回退
   const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
     setView(nextView);
 
@@ -141,6 +144,7 @@ export default function App() {
     }
   };
 
+  // 前端埋点统一出口，避免各处重复拼接用户/会话字段
   const fireTrack = (eventName: string, payload: Partial<{
     page_name: string;
     generation_id: string;
@@ -176,6 +180,7 @@ export default function App() {
       window.history.replaceState({ app: 'mingyouyi', appView: 'home' }, '');
     }
 
+    // 监听系统返回：从 history state 还原应用内视图，而不是直接退出页面
     const onPopState = (event: PopStateEvent) => {
       const nextView = event.state?.appView as HistoryView | undefined;
       setFeedbackModalOpen(false);
@@ -191,7 +196,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
   
-  // Load favorites from backend
+  // 启动时从后端拉取收藏，保持多端刷新后状态一致
   useEffect(() => {
     let mounted = true;
 
@@ -227,8 +232,10 @@ export default function App() {
       setKeywordInput('');
     }
     
+    // 至少需要一个关键词才允许发起生成
     if (finalKeywords.length === 0) return;
 
+    // 每次生成分配独立 generationId，用于关联结果、收藏和埋点
     const generationId = createGenerationId();
     setCurrentGenerationId(generationId);
     setSatisfactionStatus('idle');
@@ -245,6 +252,7 @@ export default function App() {
       if (style) params.style = style;
 
       const response = await generateNames(params);
+      // 结果项附带 result_rank / generation_id，供收藏/复制埋点关联统计
       setCurrentGenerationId(response.generation_id || generationId);
       setResults(
         response.items.map((n, idx) => ({
@@ -262,6 +270,7 @@ export default function App() {
     }
   };
 
+  // 结果页满意度反馈（满意/不满意+原因）
   const submitSatisfaction = async (satisfactionValue: 'satisfied' | 'unsatisfied', reasonTag = '') => {
     if (satisfactionSubmitting) return;
     setSatisfactionSubmitting(true);
@@ -284,6 +293,7 @@ export default function App() {
     }
   };
 
+  // 全局建议反馈弹层提交
   const submitGeneralFeedback = async () => {
     const text = feedbackText.trim();
     if (!text || feedbackSubmitting) return;
@@ -299,6 +309,7 @@ export default function App() {
       });
       setFeedbackText('');
       setFeedbackModalOpen(false);
+      // 使用轻提示替代 alert，避免打断用户操作流
       setFeedbackNotice({ type: 'success', text: '感谢反馈，我们已收到你的建议。' });
       setTimeout(() => setFeedbackNotice(null), 2200);
     } catch (e) {
@@ -310,6 +321,7 @@ export default function App() {
     }
   };
   
+  // 收藏状态与后端保持一致，避免只在本地内存变更导致刷新丢失
   const toggleFavorite = async (name: GeneratedName) => {
     const exists = favorites.some(f => f.name === name.name);
 
@@ -338,6 +350,7 @@ export default function App() {
     }
   };
   
+  // 复制后记录具体结果序号，便于后端统计 copied_count
   const copyToClipboard = async (item: GeneratedName) => {
     try {
       await navigator.clipboard.writeText(item.name);
@@ -356,6 +369,7 @@ export default function App() {
 
   const addKeyword = () => {
     const val = keywordInput.trim().replace(/[,，、]/g, '');
+    // 关键词去重且最多3个，符合 PRD 输入约束
     if (val && keywords.length < 3 && !keywords.includes(val)) {
       setKeywords([...keywords, val]);
       setKeywordInput('');
@@ -373,6 +387,7 @@ export default function App() {
   };
 
   const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter/空格/逗号快速分词；空输入时 Backspace 删除最后一个已选关键词
     if (e.key === 'Enter' || e.key === ' ' || e.key === ',' || e.key === '，') {
       e.preventDefault();
       addKeyword();
@@ -383,6 +398,7 @@ export default function App() {
 
   const isFavorite = (nameStr: string) => favorites.some(f => f.name === nameStr);
 
+  // 结果卡片在结果页和收藏页复用，避免重复 UI 结构
   const renderCard = (item: GeneratedName) => (
     <motion.div 
       key={item.id}
@@ -570,6 +586,7 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* loading 作为中间态，不入 history，防止返回键落在无意义页面 */}
           {view === 'loading' && (
             <motion.div
               key="loading"
@@ -601,6 +618,7 @@ export default function App() {
                 {results.map(renderCard)}
               </div>
 
+              {/* 结果页轻量反馈模块：用于快速收集主观满意度 */}
               <div className="mt-6 bg-white rounded-2xl p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
                 <p className="text-sm text-brand-900 mb-3 font-medium">这组名字你满意吗？</p>
                 {satisfactionStatus === 'idle' && (
@@ -718,6 +736,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* 全局反馈入口：在任意页面都可提交建议 */}
       <button
         onClick={() => setFeedbackModalOpen(true)}
         className="fixed right-6 bottom-8 z-20 bg-[#5A5A40] text-white px-4 py-2.5 rounded-full shadow-lg shadow-[#5A5A40]/20 flex items-center gap-2 text-sm"
@@ -726,6 +745,7 @@ export default function App() {
         意见反馈
       </button>
 
+      {/* 提交建议后的轻提示，不阻断当前操作 */}
       <AnimatePresence>
         {feedbackModalOpen && (
           <>

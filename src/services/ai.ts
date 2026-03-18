@@ -1,5 +1,6 @@
 import { GenerateParams, GeneratedName } from "../types";
 
+// 统一读取前端 API 基础地址：本地走 Vite 代理，生产走环境变量
 function getApiBase() {
   return import.meta.env.VITE_API_BASE_URL || "";
 }
@@ -44,6 +45,7 @@ export interface FeedbackPayload {
   generationId?: string;
 }
 
+// 生成网名主接口：返回 generation_id 供后续埋点/反馈关联
 export async function generateNames(params: GenerateParams): Promise<GenerateApiResponse> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/generate`, {
@@ -59,6 +61,7 @@ export async function generateNames(params: GenerateParams): Promise<GenerateApi
   return response.json();
 }
 
+// 获取用户收藏列表
 export async function fetchFavorites(userKey: string): Promise<FavoritePayload[]> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/favorites?userKey=${encodeURIComponent(userKey)}`);
@@ -70,6 +73,7 @@ export async function fetchFavorites(userKey: string): Promise<FavoritePayload[]
   return response.json();
 }
 
+// 新增收藏
 export async function addFavorite(userKey: string, item: FavoritePayload): Promise<void> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/favorites`, {
@@ -83,6 +87,7 @@ export async function addFavorite(userKey: string, item: FavoritePayload): Promi
   }
 }
 
+// 取消收藏
 export async function removeFavorite(userKey: string, name: string): Promise<void> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/favorites`, {
@@ -96,6 +101,7 @@ export async function removeFavorite(userKey: string, name: string): Promise<voi
   }
 }
 
+// 通用埋点上报接口
 export async function trackEvent(payload: TrackEventPayload): Promise<void> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/track`, {
@@ -109,6 +115,7 @@ export async function trackEvent(payload: TrackEventPayload): Promise<void> {
   }
 }
 
+// 用户反馈接口：支持满意度反馈与通用意见反馈
 export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
   const apiBase = getApiBase();
   const response = await fetch(`${apiBase}/api/feedback`, {
