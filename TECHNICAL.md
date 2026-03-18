@@ -14,9 +14,10 @@
 3. 后端调用豆包模型，返回结构化网名结果
 4. 后端写入生成相关埋点表（`analytics_generation_batch`、`analytics_generation_result`、`analytics_event_log`）
 5. 前端在交互节点调用 `POST /api/track` 上报埋点事件
+6. 前端通过 `POST /api/feedback` 提交满意度与建议反馈
 
 ## 2. 目录说明
-- `src/App.tsx`：前端主页面、状态管理、埋点触发
+- `src/App.tsx`：前端主页面、状态管理、埋点触发、反馈交互与移动端返回逻辑
 - `src/services/ai.ts`：前端 API 客户端与埋点上报
 - `src/types.ts`：前端类型定义
 - `server/index.ts`：后端入口、CORS、模型调用与业务 API
@@ -25,6 +26,7 @@
 - `sql/analytics_schema.sql`：埋点 SQL 表结构
 - `sql/analytics_tracking_design.md`：事件命名与指标映射
 - `sql/favorites_schema.sql`：收藏表结构
+- `sql/user_feedback_schema.sql`：用户反馈表结构
 - `cloudbaserc.json`：CloudBase 环境与云托管服务指向
 
 ## 3. 运行配置
@@ -38,6 +40,10 @@
   - `DB_USER`
   - `DB_PASSWORD`
   - `DB_NAME`
+
+后端 CORS 说明：
+- 生产环境（`NODE_ENV=production`）：严格按 `FRONTEND_ORIGIN` 白名单校验来源。
+- 开发环境：额外自动放行局域网私网来源（`192.168.x.x` / `10.x.x.x` / `172.16-31.x.x`）用于手机联调。
 
 前端构建变量：
 - `VITE_API_BASE_URL`（生产环境建议指向 CloudRun 域名）
@@ -92,6 +98,13 @@
 说明：
 - 当事件为 `click_copy` / `click_favorite` 且提供了 `generation_id + result_rank` 时，后端会同步更新 `analytics_generation_result` 的 `copied_count` / `favorited_count`。
 
+### `POST /api/feedback`
+用于写入用户反馈表 `user_feedback`。
+
+反馈类型：
+- `satisfaction`：结果满意度反馈（`satisfied` / `unsatisfied`，可带 `reasonTag`）
+- `general`：通用建议反馈（文本 `content`）
+
 ### 收藏接口
 - `GET /api/favorites?userKey=...`
 - `POST /api/favorites`
@@ -99,11 +112,14 @@
 
 收藏数据表：`user_favorite_name`
 
+反馈数据表：`user_feedback`
+
 ## 5. 埋点入库现状
 已接入实时写库：
 - `analytics_event_log`
 - `analytics_generation_batch`
 - `analytics_generation_result`
+- `user_feedback`
 
 未接入：
 - `analytics_metrics_daily`（需要离线聚合作业）
@@ -118,6 +134,7 @@
 - 前端：`http://localhost:3000`
 - 后端：`http://localhost:3001`
 - Vite 开发代理：`/api` -> `3001`
+- 手机同局域网访问：`http://<电脑局域网IP>:3000`
 
 ## 7. 验证建议
 最低质量门槛：
@@ -125,6 +142,8 @@
 2. 手工验证主链路：首页 -> 生成 -> 结果
 3. 验证收藏增删查
 4. 验证埋点入库（检查 `analytics_event_log`、`analytics_generation_batch`、`analytics_generation_result`）
+5. 验证反馈入库（检查 `user_feedback`）
+6. 验证系统返回键回退（`favorites/results` -> 上一级视图，而非直接退出）
 
 ## 8. 风险与已知问题
 - 仓库内部分中文字符串存在历史编码污染，影响可读性但不一定影响运行。

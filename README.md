@@ -11,12 +11,13 @@
 ## 项目结构
 - `src/`：React + Vite 前端
 - `src/services/ai.ts`：前端 API 请求与埋点上报封装
-- `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口）
-- `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点写库）
+- `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
+- `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点 + 用户反馈）
 - `cloudfunctions/generateApi/`：云函数备选实现
 - `sql/analytics_schema.sql`：埋点数据库表结构
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
 - `sql/favorites_schema.sql`：收藏表结构
+- `sql/user_feedback_schema.sql`：用户反馈表结构
 - `Dockerfile`：CloudRun 容器构建配置
 
 ## 本地开发
@@ -53,6 +54,7 @@ npm run dev
 ## API 概览
 - `POST /api/generate`：生成网名（并写入生成相关埋点）
 - `POST /api/track`：通用埋点事件上报
+- `POST /api/feedback`：用户反馈（满意度/建议）入库
 - `GET /api/favorites?userKey=...`：查询收藏
 - `POST /api/favorites`：新增收藏
 - `DELETE /api/favorites`：取消收藏
@@ -91,6 +93,11 @@ npm run lint
 npm run build
 npm run preview
 ```
+
+## 手机局域网调试
+- 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
+- 后端在开发环境会自动放行私网来源（`192.168.x.x` / `10.x.x.x` / `172.16-31.x.x`）的 CORS，便于手机同网段联调。
+- 生产环境仍需通过 `FRONTEND_ORIGIN` 白名单精确控制来源。
 
 ## CloudBase 说明
 - 环境 ID：`ai-username-env-2glikc1y1cb803fb`
