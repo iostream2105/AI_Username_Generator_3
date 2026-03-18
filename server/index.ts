@@ -85,6 +85,13 @@ interface TrackEventBody {
   properties?: Record<string, unknown>;
 }
 
+interface NameItem {
+  name: string;
+  meaning_title: string;
+  meaning_desc: string;
+  style_tags: string[];
+}
+
 function createEventId(prefix = "evt") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -94,6 +101,112 @@ function splitKeywords(raw: string) {
     .split(/[,\s，、]+/)
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+function safeJsonParse(raw: string): unknown {
+  const normalized = raw
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(normalized);
+}
+
+function parseNameItems(text: string): NameItem[] {
+  const trimmed = String(text || "").trim();
+  const candidates: string[] = [];
+
+  if (trimmed) {
+    candidates.push(trimmed);
+  }
+
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (codeBlockMatch?.[1]) {
+    candidates.push(codeBlockMatch[1].trim());
+  }
+
+  const firstBracket = trimmed.indexOf("[");
+  const lastBracket = trimmed.lastIndexOf("]");
+  if (firstBracket >= 0 && lastBracket > firstBracket) {
+    candidates.push(trimmed.slice(firstBracket, lastBracket + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = safeJsonParse(candidate);
+      const arrayData = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === "object" && Array.isArray((parsed as any).items)
+          ? (parsed as any).items
+          : null;
+
+      if (!arrayData) continue;
+
+      const normalizedItems = arrayData
+        .map((item: any) => ({
+          name: String(item?.name || "").trim(),
+          meaning_title: String(item?.meaning_title || "").trim(),
+          meaning_desc: String(item?.meaning_desc || "").trim(),
+          style_tags: Array.isArray(item?.style_tags) ? item.style_tags.map((x: unknown) => String(x)) : [],
+        }))
+        .filter((item: NameItem) => item.name.length > 0);
+
+      if (normalizedItems.length > 0) {
+        return normalizedItems.slice(0, 3);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error("INVALID_MODEL_JSON");
+}
+
+function buildFallbackItems(keywordList: string[], meaning?: string, style?: string): NameItem[] {
+  const base = keywordList.length > 0 ? keywordList[0] : "星";
+  const second = keywordList.length > 1 ? keywordList[1] : "海";
+  const styleTag = style || "简约";
+  const meaningText = meaning || "自由";
+
+  return [
+    {
+      name: `${base}见`,
+      meaning_title: `${meaningText}感`,
+      meaning_desc: `用“${base}”承载你的关键词记忆，整体表达克制且有留白感。`,
+      style_tags: [styleTag, "简约"],
+    },
+    {
+      name: `${second}未眠`,
+      meaning_title: `${meaningText}与生命力`,
+      meaning_desc: `在“${second}”的意象上加入情绪张力，适合安静但有力量的表达。`,
+      style_tags: [styleTag, "文艺"],
+    },
+    {
+      name: `${base}${second}`,
+      meaning_title: `${meaningText}与流动感`,
+      meaning_desc: `融合关键词核心意象，短促好记，适合日常社交昵称使用。`,
+      style_tags: [styleTag, "清冷"],
+    },
+  ];
+}
+
+async function safeTrack(task: () => Promise<void>, label: string) {
+  if (!isDbReady()) return;
+  try {
+    await task();
+  } catch (e: any) {
+    console.error(`${label} failed:`, e?.message || e);
+  }
+}
+
+async function requestModelContent(prompt: string, temperature = 0.8): Promise<string> {
+  const completion = await client.chat.completions.create({
+    model: MODEL_NAME,
+    messages: [{ role: "user", content: prompt }],
+    temperature,
+    thinking: { type: "disabled" },
+  } as any);
+
+  return completion.choices[0]?.message?.content || "";
 }
 
 app.post("/api/generate", async (req, res) => {
@@ -108,11 +221,6 @@ app.post("/api/generate", async (req, res) => {
 
   if (!keywords) {
     res.status(400).json({ error: "keywords is required" });
-    return;
-  }
-
-  if (!isDbReady()) {
-    res.status(503).json({ error: "Database is not configured" });
     return;
   }
 
@@ -144,76 +252,116 @@ app.post("/api/generate", async (req, res) => {
 ]`;
 
   try {
-    await upsertGenerationBatchStart({
-      generationId: resolvedGenerationId,
-      userKey,
-      sessionId,
-      keywordsText: keywords,
-      keywordsJson: keywordList,
-      keywordsCount: keywordList.length,
-      meaningTag: meaning || "",
-      styleTag: style || "",
-      modelName: MODEL_NAME,
-    });
-
-    await insertAnalyticsEvent({
-      eventId: createEventId("evt"),
-      userKey,
-      sessionId,
-      eventName: "click_generate",
-      pageName: "home",
-      generationId: resolvedGenerationId,
-      keywordsCount: keywordList.length,
-      meaningTag: meaning || "",
-      styleTag: style || "",
-      isSuccess: true,
-    });
-
-    const completion = await client.chat.completions.create({
-      model: MODEL_NAME,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.8,
-      thinking: { type: "disabled" },
-    } as any);
-
-    const text = completion.choices[0]?.message?.content || "[]";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : "[]");
-    const items = Array.isArray(parsed) ? parsed : [];
-    const latencyMs = Date.now() - requestStartedAt;
-
-    await finishGenerationBatch({
-      generationId: resolvedGenerationId,
-      isSuccess: true,
-      latencyMs,
-      resultCount: items.length,
-    });
-
-    await upsertGenerationResults(
-      items.map((item: any, idx: number) => ({
-        generationId: resolvedGenerationId,
-        resultRank: idx + 1,
-        resultName: String(item?.name || ""),
-        meaningTitle: String(item?.meaning_title || ""),
-        meaningDesc: String(item?.meaning_desc || ""),
-        styleTags: Array.isArray(item?.style_tags) ? item.style_tags.map(String) : [],
-      }))
+    await safeTrack(
+      () =>
+        upsertGenerationBatchStart({
+          generationId: resolvedGenerationId,
+          userKey,
+          sessionId,
+          keywordsText: keywords,
+          keywordsJson: keywordList,
+          keywordsCount: keywordList.length,
+          meaningTag: meaning || "",
+          styleTag: style || "",
+          modelName: MODEL_NAME,
+        }),
+      "upsertGenerationBatchStart"
     );
 
-    await insertAnalyticsEvent({
-      eventId: createEventId("evt"),
-      userKey,
-      sessionId,
-      eventName: "generate_success",
-      pageName: "results",
-      generationId: resolvedGenerationId,
-      keywordsCount: keywordList.length,
-      meaningTag: meaning || "",
-      styleTag: style || "",
-      isSuccess: true,
-      latencyMs,
-      properties: { result_count: items.length },
-    });
+    await safeTrack(
+      () =>
+        insertAnalyticsEvent({
+          eventId: createEventId("evt"),
+          userKey,
+          sessionId,
+          eventName: "click_generate",
+          pageName: "home",
+          generationId: resolvedGenerationId,
+          keywordsCount: keywordList.length,
+          meaningTag: meaning || "",
+          styleTag: style || "",
+          isSuccess: true,
+        }),
+      "insert click_generate"
+    );
+
+    let items: NameItem[] = [];
+    let parseRetry = false;
+    let fallbackUsed = false;
+
+    try {
+      const text = await requestModelContent(prompt, 0.8);
+      items = parseNameItems(text);
+    } catch (e: any) {
+      if (e?.message !== "INVALID_MODEL_JSON") {
+        throw e;
+      }
+
+      parseRetry = true;
+      const strictPrompt = `${prompt}\n\n再次强调：必须只返回合法 JSON 数组，不要 markdown，不要解释，不要额外文本。`;
+
+      try {
+        const retryText = await requestModelContent(strictPrompt, 0.5);
+        items = parseNameItems(retryText);
+      } catch (retryErr: any) {
+        if (retryErr?.message !== "INVALID_MODEL_JSON") {
+          throw retryErr;
+        }
+        fallbackUsed = true;
+        items = buildFallbackItems(keywordList, meaning, style);
+      }
+    }
+
+    const latencyMs = Date.now() - requestStartedAt;
+
+    await safeTrack(
+      () =>
+        finishGenerationBatch({
+          generationId: resolvedGenerationId,
+          isSuccess: true,
+          latencyMs,
+          resultCount: items.length,
+        }),
+      "finishGenerationBatch success"
+    );
+
+    await safeTrack(
+      () =>
+        upsertGenerationResults(
+          items.map((item: NameItem, idx: number) => ({
+            generationId: resolvedGenerationId,
+            resultRank: idx + 1,
+            resultName: item.name,
+            meaningTitle: item.meaning_title,
+            meaningDesc: item.meaning_desc,
+            styleTags: item.style_tags,
+          }))
+        ),
+      "upsertGenerationResults"
+    );
+
+    await safeTrack(
+      () =>
+        insertAnalyticsEvent({
+          eventId: createEventId("evt"),
+          userKey,
+          sessionId,
+          eventName: "generate_success",
+          pageName: "results",
+          generationId: resolvedGenerationId,
+          keywordsCount: keywordList.length,
+          meaningTag: meaning || "",
+          styleTag: style || "",
+          isSuccess: true,
+          latencyMs,
+          properties: {
+            result_count: items.length,
+            parse_retry: parseRetry,
+            fallback_used: fallbackUsed,
+          },
+        }),
+      "insert generate_success"
+    );
 
     res.json({ generation_id: resolvedGenerationId, items });
   } catch (e: any) {
@@ -221,32 +369,36 @@ app.post("/api/generate", async (req, res) => {
     const latencyMs = Date.now() - requestStartedAt;
     const errorCode = e?.code || "AI_GENERATION_FAILED";
 
-    try {
-      await finishGenerationBatch({
-        generationId: resolvedGenerationId,
-        isSuccess: false,
-        latencyMs,
-        errorCode,
-        resultCount: 0,
-      });
+    await safeTrack(
+      () =>
+        finishGenerationBatch({
+          generationId: resolvedGenerationId,
+          isSuccess: false,
+          latencyMs,
+          errorCode,
+          resultCount: 0,
+        }),
+      "finishGenerationBatch failure"
+    );
 
-      await insertAnalyticsEvent({
-        eventId: createEventId("evt"),
-        userKey,
-        sessionId,
-        eventName: "generate_success",
-        pageName: "results",
-        generationId: resolvedGenerationId,
-        keywordsCount: keywordList.length,
-        meaningTag: meaning || "",
-        styleTag: style || "",
-        isSuccess: false,
-        latencyMs,
-        errorCode,
-      });
-    } catch (trackErr: any) {
-      console.error("Track generation failure failed:", trackErr.message);
-    }
+    await safeTrack(
+      () =>
+        insertAnalyticsEvent({
+          eventId: createEventId("evt"),
+          userKey,
+          sessionId,
+          eventName: "generate_success",
+          pageName: "results",
+          generationId: resolvedGenerationId,
+          keywordsCount: keywordList.length,
+          meaningTag: meaning || "",
+          styleTag: style || "",
+          isSuccess: false,
+          latencyMs,
+          errorCode,
+        }),
+      "insert generate_success failure"
+    );
 
     res.status(500).json({ error: "AI generation failed" });
   }
