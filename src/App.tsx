@@ -1,11 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X } from 'lucide-react';
-import { generateNames } from './services/ai';
+import { addFavorite, fetchFavorites, generateNames, removeFavorite, trackEvent } from './services/ai';
 import { GeneratedName, GenerateParams } from './types';
 
 const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
 const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
+const USER_KEY_STORAGE = 'ai_nicknames_user_key';
+const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
+
+function createLocalId() {
+  return Math.random().toString(36).substring(2, 10);
+}
+
+function getOrCreateUserKey() {
+  const existing = localStorage.getItem(USER_KEY_STORAGE);
+  if (existing) return existing;
+
+  const generated = `u_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  localStorage.setItem(USER_KEY_STORAGE, generated);
+  return generated;
+}
+
+function getOrCreateSessionKey() {
+  const existing = sessionStorage.getItem(SESSION_KEY_STORAGE);
+  if (existing) return existing;
+
+  const generated = `s_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  sessionStorage.setItem(SESSION_KEY_STORAGE, generated);
+  return generated;
+}
+
+function createGenerationId() {
+  return `gen_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+}
 
 const CustomSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (val: string) => void, options: string[], placeholder: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -71,23 +99,65 @@ export default function App() {
   const [results, setResults] = useState<GeneratedName[]>([]);
   const [favorites, setFavorites] = useState<GeneratedName[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  
-  // Load favorites on mount
+  const [userKey] = useState<string>(() => getOrCreateUserKey());
+  const [sessionId] = useState<string>(() => getOrCreateSessionKey());
+  const [currentGenerationId, setCurrentGenerationId] = useState<string>('');
+
+  const fireTrack = (eventName: string, payload: Partial<{
+    page_name: string;
+    generation_id: string;
+    keywords_count: number;
+    meaning_tag: string;
+    style_tag: string;
+    result_rank: number;
+    result_name: string;
+    is_success: boolean;
+    latency_ms: number;
+    error_code: string;
+    properties: Record<string, unknown>;
+  }> = {}) => {
+    void trackEvent({
+      event_name: eventName,
+      user_key: userKey,
+      session_id: sessionId,
+      ...payload,
+    }).catch((e) => {
+      console.error(`Track ${eventName} failed`, e);
+    });
+  };
+
   useEffect(() => {
-    const saved = localStorage.getItem('ai_nicknames_favorites');
-    if (saved) {
-      try {
-        setFavorites(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse favorites', e);
-      }
-    }
+    fireTrack('home_exposure', { page_name: 'home' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Save favorites on change
+  // Load favorites from backend
   useEffect(() => {
-    localStorage.setItem('ai_nicknames_favorites', JSON.stringify(favorites));
-  }, [favorites]);
+    let mounted = true;
+
+    const loadFavorites = async () => {
+      try {
+        const items = await fetchFavorites(userKey);
+        if (!mounted) return;
+
+        setFavorites(items.map((item) => ({
+          id: createLocalId(),
+          name: item.name,
+          meaning_title: item.meaning_title,
+          meaning_desc: item.meaning_desc,
+          style_tags: item.style_tags || [],
+        })));
+      } catch (e) {
+        console.error('Failed to load favorites from API', e);
+      }
+    };
+
+    void loadFavorites();
+
+    return () => {
+      mounted = false;
+    };
+  }, [userKey]);
   
   const handleGenerate = async () => {
     let finalKeywords = [...keywords];
@@ -98,15 +168,31 @@ export default function App() {
     }
     
     if (finalKeywords.length === 0) return;
+
+    const generationId = createGenerationId();
+    setCurrentGenerationId(generationId);
     
     setView('loading');
     try {
-      const params: GenerateParams = { keywords: finalKeywords.join('、') };
+      const params: GenerateParams = {
+        keywords: finalKeywords.join('、'),
+        userKey,
+        sessionId,
+        generationId,
+      };
       if (meaning) params.meaning = meaning;
       if (style) params.style = style;
-      
-      const newNames = await generateNames(params);
-      setResults(newNames.map(n => ({ ...n, id: Math.random().toString(36).substring(7) })));
+
+      const response = await generateNames(params);
+      setCurrentGenerationId(response.generation_id || generationId);
+      setResults(
+        response.items.map((n, idx) => ({
+          ...n,
+          id: createLocalId(),
+          result_rank: idx + 1,
+          generation_id: response.generation_id || generationId,
+        }))
+      );
       setView('results');
     } catch (error) {
       console.error("Generation failed", error);
@@ -115,22 +201,45 @@ export default function App() {
     }
   };
   
-  const toggleFavorite = (name: GeneratedName) => {
-    setFavorites(prev => {
-      const exists = prev.find(f => f.name === name.name);
+  const toggleFavorite = async (name: GeneratedName) => {
+    const exists = favorites.some(f => f.name === name.name);
+
+    try {
       if (exists) {
-        return prev.filter(f => f.name !== name.name);
+        await removeFavorite(userKey, name.name);
+        setFavorites(prev => prev.filter(f => f.name !== name.name));
       } else {
-        return [name, ...prev];
+        await addFavorite(userKey, {
+          name: name.name,
+          meaning_title: name.meaning_title,
+          meaning_desc: name.meaning_desc,
+          style_tags: name.style_tags || [],
+        });
+        setFavorites(prev => [name, ...prev]);
+        fireTrack('click_favorite', {
+          page_name: view,
+          generation_id: name.generation_id || currentGenerationId,
+          result_rank: name.result_rank || 0,
+          result_name: name.name,
+        });
       }
-    });
+    } catch (e) {
+      console.error('Favorite action failed', e);
+      alert('收藏操作失败，请稍后重试');
+    }
   };
   
-  const copyToClipboard = async (text: string, id: string) => {
+  const copyToClipboard = async (item: GeneratedName) => {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
+      await navigator.clipboard.writeText(item.name);
+      setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 2000);
+      fireTrack('click_copy', {
+        page_name: view,
+        generation_id: item.generation_id || currentGenerationId,
+        result_rank: item.result_rank || 0,
+        result_name: item.name,
+      });
     } catch (err) {
       console.error('Failed to copy', err);
     }
@@ -141,6 +250,10 @@ export default function App() {
     if (val && keywords.length < 3 && !keywords.includes(val)) {
       setKeywords([...keywords, val]);
       setKeywordInput('');
+      fireTrack('input_keywords', {
+        page_name: 'home',
+        properties: { keyword: val, keyword_count: keywords.length + 1 },
+      });
     } else if (val && keywords.includes(val)) {
       setKeywordInput('');
     }
@@ -172,7 +285,7 @@ export default function App() {
         <h3 className="font-serif text-3xl font-medium tracking-tight text-brand-900">{item.name}</h3>
         <div className="flex gap-2">
           <button 
-            onClick={() => copyToClipboard(item.name, item.id)}
+            onClick={() => copyToClipboard(item)}
             className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
           >
             {copiedId === item.id ? <Check size={18} /> : <Copy size={18} />}
@@ -279,7 +392,10 @@ export default function App() {
                     </label>
                     <CustomSelect 
                       value={meaning} 
-                      onChange={setMeaning} 
+                      onChange={(val) => {
+                        setMeaning(val);
+                        fireTrack('select_meaning', { page_name: 'home', meaning_tag: val || '' });
+                      }} 
                       options={MEANING_TAGS} 
                       placeholder="不限寓意" 
                     />
@@ -291,7 +407,10 @@ export default function App() {
                     </label>
                     <CustomSelect 
                       value={style} 
-                      onChange={setStyle} 
+                      onChange={(val) => {
+                        setStyle(val);
+                        fireTrack('select_style', { page_name: 'home', style_tag: val || '' });
+                      }} 
                       options={STYLE_TAGS} 
                       placeholder="不限风格" 
                     />
@@ -375,14 +494,29 @@ export default function App() {
 
               <div className="mt-8 flex gap-4">
                 <button
-                  onClick={() => setView('home')}
+                  onClick={() => {
+                    fireTrack('back_modify', {
+                      page_name: 'results',
+                      generation_id: currentGenerationId,
+                    });
+                    setView('home');
+                  }}
                   className="flex-1 bg-white text-brand-900 rounded-full py-4 font-medium flex items-center justify-center gap-2 hover:bg-brand-50 transition-colors border border-brand-900/10"
                 >
                   <ChevronLeft size={18} />
                   重新编辑
                 </button>
                 <button
-                  onClick={handleGenerate}
+                  onClick={() => {
+                    fireTrack('click_regenerate', {
+                      page_name: 'results',
+                      generation_id: currentGenerationId,
+                      keywords_count: keywords.length + (keywordInput.trim() ? 1 : 0),
+                      meaning_tag: meaning || '',
+                      style_tag: style || '',
+                    });
+                    void handleGenerate();
+                  }}
                   className="flex-1 bg-[#5A5A40] text-white rounded-full py-4 font-medium flex items-center justify-center gap-2 hover:bg-[#4A4A30] transition-colors shadow-lg shadow-[#5A5A40]/20"
                 >
                   <RefreshCw size={18} />
