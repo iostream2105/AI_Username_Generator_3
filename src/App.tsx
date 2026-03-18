@@ -4,6 +4,9 @@ import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, Chevron
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
 import { GeneratedName, GenerateParams } from './types';
 
+type AppView = 'home' | 'loading' | 'results' | 'favorites';
+type HistoryView = 'home' | 'results' | 'favorites';
+
 const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
 const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
@@ -88,7 +91,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 };
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'loading' | 'results' | 'favorites'>('home');
+  const [view, setView] = useState<AppView>('home');
   
   // Form State
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -109,6 +112,34 @@ export default function App() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
+    setView(nextView);
+
+    if (typeof window === 'undefined' || mode === 'none') return;
+    if (nextView === 'loading') return;
+
+    const state = { app: 'mingyouyi', appView: nextView as HistoryView };
+    const currentView = window.history.state?.appView as HistoryView | undefined;
+
+    if (mode === 'replace') {
+      window.history.replaceState(state, '');
+      return;
+    }
+
+    if (currentView !== nextView) {
+      window.history.pushState(state, '');
+    }
+  };
+
+  const goBackInApp = () => {
+    if (typeof window === 'undefined') return;
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigateToView('home', 'replace');
+    }
+  };
 
   const fireTrack = (eventName: string, payload: Partial<{
     page_name: string;
@@ -136,6 +167,28 @@ export default function App() {
   useEffect(() => {
     fireTrack('home_exposure', { page_name: 'home' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!window.history.state?.appView) {
+      window.history.replaceState({ app: 'mingyouyi', appView: 'home' }, '');
+    }
+
+    const onPopState = (event: PopStateEvent) => {
+      const nextView = event.state?.appView as HistoryView | undefined;
+      setFeedbackModalOpen(false);
+
+      if (nextView === 'home' || nextView === 'results' || nextView === 'favorites') {
+        setView(nextView);
+      } else {
+        setView('home');
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
   
   // Load favorites from backend
@@ -201,11 +254,11 @@ export default function App() {
           generation_id: response.generation_id || generationId,
         }))
       );
-      setView('results');
+      navigateToView('results');
     } catch (error) {
       console.error("Generation failed", error);
       alert("生成失败，请稍后重试");
-      setView('home');
+      navigateToView('home', 'replace');
     }
   };
 
@@ -383,7 +436,7 @@ export default function App() {
           名有意
         </div>
         <button 
-          onClick={() => setView('favorites')}
+          onClick={() => navigateToView('favorites')}
           className="p-2 text-brand-800 hover:bg-black/5 rounded-full transition-colors"
         >
           <Bookmark size={20} />
@@ -605,7 +658,7 @@ export default function App() {
                       page_name: 'results',
                       generation_id: currentGenerationId,
                     });
-                    setView('home');
+                    goBackInApp();
                   }}
                   className="flex-1 bg-white text-brand-900 rounded-full py-4 font-medium flex items-center justify-center gap-2 hover:bg-brand-50 transition-colors border border-brand-900/10"
                 >
@@ -642,7 +695,7 @@ export default function App() {
             >
               <div className="mb-6 flex items-center gap-3">
                 <button 
-                  onClick={() => setView('home')}
+                  onClick={goBackInApp}
                   className="p-2 -ml-2 text-brand-800 hover:bg-black/5 rounded-full transition-colors"
                 >
                   <ChevronLeft size={20} />
