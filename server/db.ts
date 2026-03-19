@@ -73,6 +73,141 @@ export interface UserFeedbackRecord {
   generationId?: string;
 }
 
+export interface AdminDateRange {
+  startDate: string;
+  endDateExclusive: string;
+}
+
+export interface AdminPagination {
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminPaginationResult {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AdminListResult<T> {
+  rows: T[];
+  pagination: AdminPaginationResult;
+}
+
+export interface AdminOverviewKpi {
+  home_exposure: number;
+  click_generate: number;
+  generate_success: number;
+  generate_success_rate: number;
+  copy_rate: number;
+  favorite_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface AdminOverviewTrend {
+  date: string;
+  home_exposure: number;
+  click_generate: number;
+  generate_success: number;
+  generate_success_rate: number;
+  copy_rate: number;
+  favorite_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface AdminOverviewResult {
+  kpi: AdminOverviewKpi;
+  trend: AdminOverviewTrend[];
+}
+
+export interface AdminGenerationRow {
+  generation_id: string;
+  user_key: string;
+  session_id: string;
+  keywords_text: string;
+  keywords_count: number;
+  meaning_tag: string;
+  style_tag: string;
+  requested_at: string;
+  responded_at: string;
+  is_success: boolean;
+  latency_ms: number;
+  model_name: string;
+  error_code: string;
+  result_count: number;
+}
+
+export interface AdminEventRow {
+  event_id: string;
+  user_key: string;
+  session_id: string;
+  event_name: string;
+  event_time: string;
+  page_name: string;
+  generation_id: string;
+  keywords_count: number;
+  meaning_tag: string;
+  style_tag: string;
+  result_rank: number;
+  result_name: string;
+  is_success: boolean;
+  latency_ms: number;
+  error_code: string;
+  properties: Record<string, unknown> | null;
+}
+
+export interface AdminFavoriteRow {
+  user_key: string;
+  name: string;
+  meaning_title: string;
+  meaning_desc: string;
+  style_tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminFeedbackRow {
+  user_key: string;
+  session_id: string;
+  feedback_type: string;
+  satisfaction_value: string;
+  reason_tag: string;
+  content: string;
+  page_name: string;
+  generation_id: string;
+  created_at: string;
+}
+
+export interface AdminGenerationFilters {
+  dateRange: AdminDateRange;
+  pagination: AdminPagination;
+  isSuccess?: boolean;
+  meaningTag?: string;
+  styleTag?: string;
+}
+
+export interface AdminEventFilters {
+  dateRange: AdminDateRange;
+  pagination: AdminPagination;
+  eventName?: string;
+  generationId?: string;
+}
+
+export interface AdminFavoriteFilters {
+  dateRange: AdminDateRange;
+  pagination: AdminPagination;
+  userKey?: string;
+  name?: string;
+}
+
+export interface AdminFeedbackFilters {
+  dateRange: AdminDateRange;
+  pagination: AdminPagination;
+  feedbackType?: string;
+  satisfactionValue?: string;
+}
+
 let pool: Pool | null = null;
 
 // 支持两种配置方式：单连接串（DB_URL/MYSQL_URL）或拆分字段
@@ -124,13 +259,428 @@ export function isDbReady() {
   return Boolean(pool);
 }
 
-// 查询用户收藏列表（按创建时间倒序）
-export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
+function getDb() {
   if (!pool) {
     throw new Error("DB is not initialized");
   }
+  return pool;
+}
 
-  const [rows] = await pool.query<RowDataPacket[]>(
+function calcPaginationResult(total: number, pagination: AdminPagination): AdminPaginationResult {
+  const safeTotal = Math.max(0, total);
+  const totalPages = Math.max(1, Math.ceil(safeTotal / pagination.pageSize));
+  return {
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    total: safeTotal,
+    totalPages,
+  };
+}
+
+function safeDivide(numerator: number, denominator: number) {
+  if (!denominator) return 0;
+  return Number((numerator / denominator).toFixed(4));
+}
+
+function dayRange(startDate: string, endDateExclusive: string) {
+  const result: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDateExclusive}T00:00:00.000Z`);
+  while (cursor < end) {
+    result.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return result;
+}
+
+function normalizeSqlDate(value: unknown) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  const matched = text.match(/\d{4}-\d{2}-\d{2}/);
+  return matched ? matched[0] : text.slice(0, 10);
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+export async function getAdminOverview(dateRange: AdminDateRange): Promise<AdminOverviewResult> {
+  const db = getDb();
+  const [summaryRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        SUM(event_name = 'home_exposure') AS home_exposure,
+        SUM(event_name = 'click_generate') AS click_generate,
+        SUM(event_name = 'generate_success' AND is_success = 1) AS generate_success,
+        SUM(event_name = 'click_copy') AS click_copy,
+        SUM(event_name = 'click_favorite') AS click_favorite
+      FROM analytics_event_log
+      WHERE event_time >= ? AND event_time < ?
+    `,
+    [dateRange.startDate, dateRange.endDateExclusive]
+  );
+
+  const [latencySummaryRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT AVG(latency_ms) AS avg_latency_ms
+      FROM analytics_generation_batch
+      WHERE requested_at >= ? AND requested_at < ? AND is_success = 1
+    `,
+    [dateRange.startDate, dateRange.endDateExclusive]
+  );
+
+  const summary = (summaryRows[0] || {}) as RowDataPacket;
+  const avgLatency = Number(latencySummaryRows[0]?.avg_latency_ms || 0);
+  const homeExposure = Number(summary.home_exposure || 0);
+  const clickGenerate = Number(summary.click_generate || 0);
+  const generateSuccess = Number(summary.generate_success || 0);
+  const clickCopy = Number(summary.click_copy || 0);
+  const clickFavorite = Number(summary.click_favorite || 0);
+
+  const [eventTrendRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        DATE_FORMAT(event_time, '%Y-%m-%d') AS stat_date,
+        SUM(event_name = 'home_exposure') AS home_exposure,
+        SUM(event_name = 'click_generate') AS click_generate,
+        SUM(event_name = 'generate_success' AND is_success = 1) AS generate_success,
+        SUM(event_name = 'click_copy') AS click_copy,
+        SUM(event_name = 'click_favorite') AS click_favorite
+      FROM analytics_event_log
+      WHERE event_time >= ? AND event_time < ?
+      GROUP BY DATE_FORMAT(event_time, '%Y-%m-%d')
+      ORDER BY stat_date ASC
+    `,
+    [dateRange.startDate, dateRange.endDateExclusive]
+  );
+
+  const [latencyTrendRows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        DATE_FORMAT(requested_at, '%Y-%m-%d') AS stat_date,
+        AVG(latency_ms) AS avg_latency_ms
+      FROM analytics_generation_batch
+      WHERE requested_at >= ? AND requested_at < ? AND is_success = 1
+      GROUP BY DATE_FORMAT(requested_at, '%Y-%m-%d')
+      ORDER BY stat_date ASC
+    `,
+    [dateRange.startDate, dateRange.endDateExclusive]
+  );
+
+  const eventTrendMap = new Map<string, RowDataPacket>();
+  eventTrendRows.forEach((row) => {
+    eventTrendMap.set(normalizeSqlDate(row.stat_date), row);
+  });
+  const latencyTrendMap = new Map<string, number>();
+  latencyTrendRows.forEach((row) => {
+    latencyTrendMap.set(normalizeSqlDate(row.stat_date), Number(row.avg_latency_ms || 0));
+  });
+
+  const trend: AdminOverviewTrend[] = dayRange(dateRange.startDate, dateRange.endDateExclusive).map((date) => {
+    const eventRow = eventTrendMap.get(date);
+    const home = Number(eventRow?.home_exposure || 0);
+    const click = Number(eventRow?.click_generate || 0);
+    const success = Number(eventRow?.generate_success || 0);
+    const copy = Number(eventRow?.click_copy || 0);
+    const favorite = Number(eventRow?.click_favorite || 0);
+    return {
+      date,
+      home_exposure: home,
+      click_generate: click,
+      generate_success: success,
+      generate_success_rate: safeDivide(success, click),
+      copy_rate: safeDivide(copy, success),
+      favorite_rate: safeDivide(favorite, success),
+      avg_latency_ms: Number((latencyTrendMap.get(date) || 0).toFixed(2)),
+    };
+  }).reverse();
+
+  return {
+    kpi: {
+      home_exposure: homeExposure,
+      click_generate: clickGenerate,
+      generate_success: generateSuccess,
+      generate_success_rate: safeDivide(generateSuccess, clickGenerate),
+      copy_rate: safeDivide(clickCopy, generateSuccess),
+      favorite_rate: safeDivide(clickFavorite, generateSuccess),
+      avg_latency_ms: Number(avgLatency.toFixed(2)),
+    },
+    trend,
+  };
+}
+
+export async function listAdminGenerations(filters: AdminGenerationFilters): Promise<AdminListResult<AdminGenerationRow>> {
+  const db = getDb();
+  const where: string[] = ["requested_at >= ?", "requested_at < ?"];
+  const params: Array<string | number> = [filters.dateRange.startDate, filters.dateRange.endDateExclusive];
+  if (typeof filters.isSuccess === "boolean") {
+    where.push("is_success = ?");
+    params.push(filters.isSuccess ? 1 : 0);
+  }
+  if (filters.meaningTag) {
+    where.push("meaning_tag = ?");
+    params.push(filters.meaningTag);
+  }
+  if (filters.styleTag) {
+    where.push("style_tag = ?");
+    params.push(filters.styleTag);
+  }
+  const whereSql = where.join(" AND ");
+
+  const [countRows] = await db.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM analytics_generation_batch WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(countRows[0]?.total || 0);
+  const offset = (filters.pagination.page - 1) * filters.pagination.pageSize;
+
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        generation_id,
+        user_key,
+        session_id,
+        keywords_text,
+        keywords_count,
+        meaning_tag,
+        style_tag,
+        requested_at,
+        responded_at,
+        is_success,
+        latency_ms,
+        model_name,
+        error_code,
+        result_count
+      FROM analytics_generation_batch
+      WHERE ${whereSql}
+      ORDER BY requested_at DESC
+      LIMIT ? OFFSET ?
+    `,
+    [...params, filters.pagination.pageSize, offset]
+  );
+
+  return {
+    rows: rows.map((row) => ({
+      generation_id: String(row.generation_id || ""),
+      user_key: String(row.user_key || ""),
+      session_id: String(row.session_id || ""),
+      keywords_text: String(row.keywords_text || ""),
+      keywords_count: Number(row.keywords_count || 0),
+      meaning_tag: String(row.meaning_tag || ""),
+      style_tag: String(row.style_tag || ""),
+      requested_at: String(row.requested_at || ""),
+      responded_at: String(row.responded_at || ""),
+      is_success: Number(row.is_success || 0) === 1,
+      latency_ms: Number(row.latency_ms || 0),
+      model_name: String(row.model_name || ""),
+      error_code: String(row.error_code || ""),
+      result_count: Number(row.result_count || 0),
+    })),
+    pagination: calcPaginationResult(total, filters.pagination),
+  };
+}
+
+export async function listAdminEvents(filters: AdminEventFilters): Promise<AdminListResult<AdminEventRow>> {
+  const db = getDb();
+  const where: string[] = ["event_time >= ?", "event_time < ?"];
+  const params: Array<string | number> = [filters.dateRange.startDate, filters.dateRange.endDateExclusive];
+  if (filters.eventName) {
+    where.push("event_name = ?");
+    params.push(filters.eventName);
+  }
+  if (filters.generationId) {
+    where.push("generation_id = ?");
+    params.push(filters.generationId);
+  }
+  const whereSql = where.join(" AND ");
+
+  const [countRows] = await db.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM analytics_event_log WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(countRows[0]?.total || 0);
+  const offset = (filters.pagination.page - 1) * filters.pagination.pageSize;
+
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        event_id,
+        user_key,
+        session_id,
+        event_name,
+        event_time,
+        page_name,
+        generation_id,
+        keywords_count,
+        meaning_tag,
+        style_tag,
+        result_rank,
+        result_name,
+        is_success,
+        latency_ms,
+        error_code,
+        properties
+      FROM analytics_event_log
+      WHERE ${whereSql}
+      ORDER BY event_time DESC
+      LIMIT ? OFFSET ?
+    `,
+    [...params, filters.pagination.pageSize, offset]
+  );
+
+  return {
+    rows: rows.map((row) => ({
+      event_id: String(row.event_id || ""),
+      user_key: String(row.user_key || ""),
+      session_id: String(row.session_id || ""),
+      event_name: String(row.event_name || ""),
+      event_time: String(row.event_time || ""),
+      page_name: String(row.page_name || ""),
+      generation_id: String(row.generation_id || ""),
+      keywords_count: Number(row.keywords_count || 0),
+      meaning_tag: String(row.meaning_tag || ""),
+      style_tag: String(row.style_tag || ""),
+      result_rank: Number(row.result_rank || 0),
+      result_name: String(row.result_name || ""),
+      is_success: Number(row.is_success || 0) === 1,
+      latency_ms: Number(row.latency_ms || 0),
+      error_code: String(row.error_code || ""),
+      properties: parseJsonObject(row.properties),
+    })),
+    pagination: calcPaginationResult(total, filters.pagination),
+  };
+}
+
+export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise<AdminListResult<AdminFavoriteRow>> {
+  const db = getDb();
+  const where: string[] = ["created_at >= ?", "created_at < ?"];
+  const params: Array<string | number> = [filters.dateRange.startDate, filters.dateRange.endDateExclusive];
+  if (filters.userKey) {
+    where.push("user_key LIKE ?");
+    params.push(`%${filters.userKey}%`);
+  }
+  if (filters.name) {
+    where.push("name LIKE ?");
+    params.push(`%${filters.name}%`);
+  }
+  const whereSql = where.join(" AND ");
+
+  const [countRows] = await db.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM user_favorite_name WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(countRows[0]?.total || 0);
+  const offset = (filters.pagination.page - 1) * filters.pagination.pageSize;
+
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        user_key,
+        name,
+        meaning_title,
+        meaning_desc,
+        style_tags_json,
+        created_at,
+        updated_at
+      FROM user_favorite_name
+      WHERE ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+    [...params, filters.pagination.pageSize, offset]
+  );
+
+  return {
+    rows: rows.map((row) => ({
+      user_key: String(row.user_key || ""),
+      name: String(row.name || ""),
+      meaning_title: String(row.meaning_title || ""),
+      meaning_desc: String(row.meaning_desc || ""),
+      style_tags: parseStyleTags(row.style_tags_json),
+      created_at: String(row.created_at || ""),
+      updated_at: String(row.updated_at || ""),
+    })),
+    pagination: calcPaginationResult(total, filters.pagination),
+  };
+}
+
+export async function listAdminFeedback(filters: AdminFeedbackFilters): Promise<AdminListResult<AdminFeedbackRow>> {
+  const db = getDb();
+  const where: string[] = ["created_at >= ?", "created_at < ?"];
+  const params: Array<string | number> = [filters.dateRange.startDate, filters.dateRange.endDateExclusive];
+  if (filters.feedbackType) {
+    where.push("feedback_type = ?");
+    params.push(filters.feedbackType);
+  }
+  if (filters.satisfactionValue) {
+    where.push("satisfaction_value = ?");
+    params.push(filters.satisfactionValue);
+  }
+  const whereSql = where.join(" AND ");
+
+  const [countRows] = await db.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM user_feedback WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(countRows[0]?.total || 0);
+  const offset = (filters.pagination.page - 1) * filters.pagination.pageSize;
+
+  const [rows] = await db.query<RowDataPacket[]>(
+    `
+      SELECT
+        user_key,
+        session_id,
+        feedback_type,
+        satisfaction_value,
+        reason_tag,
+        content,
+        page_name,
+        generation_id,
+        created_at
+      FROM user_feedback
+      WHERE ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+    [...params, filters.pagination.pageSize, offset]
+  );
+
+  return {
+    rows: rows.map((row) => ({
+      user_key: String(row.user_key || ""),
+      session_id: String(row.session_id || ""),
+      feedback_type: String(row.feedback_type || ""),
+      satisfaction_value: String(row.satisfaction_value || ""),
+      reason_tag: String(row.reason_tag || ""),
+      content: String(row.content || ""),
+      page_name: String(row.page_name || ""),
+      generation_id: String(row.generation_id || ""),
+      created_at: String(row.created_at || ""),
+    })),
+    pagination: calcPaginationResult(total, filters.pagination),
+  };
+}
+
+// 查询用户收藏列表（按创建时间倒序）
+export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
+  const db = getDb();
+
+  const [rows] = await db.query<RowDataPacket[]>(
     `
       SELECT
         name,
@@ -154,11 +704,9 @@ export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
 
 // 收藏写入采用 upsert，避免同一用户同名收藏重复
 export async function upsertFavorite(record: FavoriteRecord) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       INSERT INTO user_favorite_name (
         user_key,
@@ -184,11 +732,9 @@ export async function upsertFavorite(record: FavoriteRecord) {
 }
 
 export async function deleteFavorite(userKey: string, name: string) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       DELETE FROM user_favorite_name
       WHERE user_key = ? AND name = ?
@@ -199,11 +745,9 @@ export async function deleteFavorite(userKey: string, name: string) {
 
 // 通用事件埋点写入（analytics_event_log）
 export async function insertAnalyticsEvent(record: TrackEventRecord) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       INSERT INTO analytics_event_log (
         event_id,
@@ -245,11 +789,9 @@ export async function insertAnalyticsEvent(record: TrackEventRecord) {
 
 // 生成批次开始记录（若 generation_id 已存在则更新）
 export async function upsertGenerationBatchStart(record: GenerationBatchStartRecord) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       INSERT INTO analytics_generation_batch (
         generation_id,
@@ -294,11 +836,9 @@ export async function upsertGenerationBatchStart(record: GenerationBatchStartRec
 
 // 生成批次结束记录（成功/失败统一更新）
 export async function finishGenerationBatch(record: GenerationBatchFinishRecord) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       UPDATE analytics_generation_batch
       SET
@@ -321,12 +861,13 @@ export async function finishGenerationBatch(record: GenerationBatchFinishRecord)
 
 // 批量写入生成结果（按 generation_id + result_rank 幂等更新）
 export async function upsertGenerationResults(results: GenerationResultRecord[]) {
-  if (!pool || results.length === 0) {
+  if (results.length === 0) {
     return;
   }
+  const db = getDb();
 
   for (const item of results) {
-    await pool.query(
+    await db.query(
       `
         INSERT INTO analytics_generation_result (
           generation_id,
@@ -360,11 +901,9 @@ export async function bumpGenerationResultCounter(
   resultRank: number,
   counter: "copied_count" | "favorited_count"
 ) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       UPDATE analytics_generation_result
       SET ${counter} = ${counter} + 1
@@ -376,11 +915,9 @@ export async function bumpGenerationResultCounter(
 
 // 用户反馈入库（满意度与意见反馈共用）
 export async function insertUserFeedback(record: UserFeedbackRecord) {
-  if (!pool) {
-    throw new Error("DB is not initialized");
-  }
+  const db = getDb();
 
-  await pool.query(
+  await db.query(
     `
       INSERT INTO user_feedback (
         user_key,

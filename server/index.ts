@@ -3,13 +3,23 @@ import cors from "cors";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import {
+  AdminFeedbackFilters,
+  AdminFavoriteFilters,
+  AdminGenerationFilters,
+  AdminOverviewTrend,
+  AdminPagination,
   bumpGenerationResultCounter,
   deleteFavorite,
   finishGenerationBatch,
   initDb,
   insertUserFeedback,
+  getAdminOverview,
   insertAnalyticsEvent,
   isDbReady,
+  listAdminEvents,
+  listAdminFavorites,
+  listAdminFeedback,
+  listAdminGenerations,
   listFavorites,
   upsertFavorite,
   upsertGenerationBatchStart,
@@ -24,6 +34,7 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
   .map((item) => item.trim())
   .filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
+const ADMIN_LOCAL_ONLY = process.env.ADMIN_LOCAL_ONLY !== "false";
 
 // 开发环境放行私网来源，便于手机同局域网调试；生产仍按白名单校验
 function isPrivateNetworkOrigin(origin: string) {
@@ -273,6 +284,133 @@ async function requestModelContent(prompt: string, temperature = 0.8): Promise<s
 
   return completion.choices[0]?.message?.content || "";
 }
+
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function parseHostnameFromHostHeader(hostHeader: string | undefined) {
+  if (!hostHeader) return "";
+  return hostHeader.split(":")[0]?.trim().toLowerCase() || "";
+}
+
+function isLocalAdminRequest(req: express.Request) {
+  const hostName = parseHostnameFromHostHeader(req.headers.host);
+  if (!isLoopbackHost(hostName)) {
+    return false;
+  }
+
+  const origin = String(req.headers.origin || "").trim();
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const originHost = new URL(origin).hostname.toLowerCase();
+    return isLoopbackHost(originHost);
+  } catch {
+    return false;
+  }
+}
+
+function parseDateInput(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const d = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  return raw;
+}
+
+function formatDateUTC(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function resolveDateRange(query: Record<string, unknown>) {
+  const endDateInput = parseDateInput(query.endDate);
+  const startDateInput = parseDateInput(query.startDate);
+
+  const todayUtc = new Date();
+  const defaultEnd = formatDateUTC(todayUtc);
+  const defaultStart = formatDateUTC(addDays(todayUtc, -6));
+
+  const endDate = endDateInput || defaultEnd;
+  const startDate = startDateInput || defaultStart;
+
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  if (start > end) {
+    throw new Error("startDate must be less than or equal to endDate");
+  }
+
+  const days = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+  if (days > 31) {
+    throw new Error("date range must be within 31 days");
+  }
+
+  return {
+    startDate,
+    endDate,
+    endDateExclusive: formatDateUTC(addDays(end, 1)),
+  };
+}
+
+function resolvePagination(query: Record<string, unknown>): AdminPagination {
+  const page = Math.max(1, Number.parseInt(String(query.page || "1"), 10) || 1);
+  const pageSizeRaw = Number.parseInt(String(query.pageSize || "20"), 10) || 20;
+  const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
+  return { page, pageSize };
+}
+
+function stringQuery(query: Record<string, unknown>, key: string) {
+  return String(query[key] || "").trim();
+}
+
+function parseBooleanQuery(query: Record<string, unknown>, key: string): boolean | undefined {
+  const raw = String(query[key] || "").trim().toLowerCase();
+  if (!raw) return undefined;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return undefined;
+}
+
+function toPercent(value: number) {
+  return Number((value * 100).toFixed(2));
+}
+
+function csvCell(value: unknown) {
+  const raw = String(value ?? "");
+  return `"${raw.replace(/"/g, "\"\"")}"`;
+}
+
+function toCsv(columns: string[], rows: Array<Record<string, unknown>>) {
+  const header = columns.map(csvCell).join(",");
+  const lines = rows.map((row) => columns.map((col) => csvCell(row[col])).join(","));
+  return `\uFEFF${[header, ...lines].join("\n")}`;
+}
+
+function sendCsv(res: express.Response, fileName: string, csvContent: string) {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=\"${fileName}\"`);
+  res.send(csvContent);
+}
+
+app.use("/api/admin", (req, res, next) => {
+  if (!ADMIN_LOCAL_ONLY) {
+    next();
+    return;
+  }
+  if (isLocalAdminRequest(req)) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: "Admin API is restricted to localhost" });
+});
 
 app.post("/api/generate", async (req, res) => {
   const {
@@ -640,6 +778,396 @@ app.delete("/api/favorites", async (req, res) => {
   } catch (e: any) {
     console.error("Delete favorite failed:", e.message);
     res.status(500).json({ error: "Delete favorite failed" });
+  }
+});
+
+app.get("/api/admin/overview", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const dateRange = resolveDateRange(query);
+    const overview = await getAdminOverview({
+      startDate: dateRange.startDate,
+      endDateExclusive: dateRange.endDateExclusive,
+    });
+    res.json({
+      data: {
+        kpi: {
+          ...overview.kpi,
+          generate_success_rate: toPercent(overview.kpi.generate_success_rate),
+          copy_rate: toPercent(overview.kpi.copy_rate),
+          favorite_rate: toPercent(overview.kpi.favorite_rate),
+        },
+        trend: overview.trend.map((item: AdminOverviewTrend) => ({
+          ...item,
+          generate_success_rate: toPercent(item.generate_success_rate),
+          copy_rate: toPercent(item.copy_rate),
+          favorite_rate: toPercent(item.favorite_rate),
+        })),
+      },
+      summary: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      },
+    });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin overview failed:", e?.message || e);
+    res.status(500).json({ error: "Admin overview failed" });
+  }
+});
+
+app.get("/api/admin/generations", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const dateRange = resolveDateRange(query);
+    const filters: AdminGenerationFilters = {
+      dateRange: {
+        startDate: dateRange.startDate,
+        endDateExclusive: dateRange.endDateExclusive,
+      },
+      pagination: resolvePagination(query),
+      isSuccess: parseBooleanQuery(query, "isSuccess"),
+      meaningTag: stringQuery(query, "meaningTag"),
+      styleTag: stringQuery(query, "styleTag"),
+    };
+    const result = await listAdminGenerations(filters);
+    res.json({
+      data: result.rows,
+      pagination: result.pagination,
+      summary: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      },
+    });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin generations failed:", e?.message || e);
+    res.status(500).json({ error: "Admin generations failed" });
+  }
+});
+
+app.get("/api/admin/events", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const dateRange = resolveDateRange(query);
+    const result = await listAdminEvents({
+      dateRange: {
+        startDate: dateRange.startDate,
+        endDateExclusive: dateRange.endDateExclusive,
+      },
+      pagination: resolvePagination(query),
+      eventName: stringQuery(query, "eventName"),
+      generationId: stringQuery(query, "generationId"),
+    });
+    res.json({
+      data: result.rows,
+      pagination: result.pagination,
+      summary: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      },
+    });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin events failed:", e?.message || e);
+    res.status(500).json({ error: "Admin events failed" });
+  }
+});
+
+app.get("/api/admin/favorites", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const dateRange = resolveDateRange(query);
+    const filters: AdminFavoriteFilters = {
+      dateRange: {
+        startDate: dateRange.startDate,
+        endDateExclusive: dateRange.endDateExclusive,
+      },
+      pagination: resolvePagination(query),
+      userKey: stringQuery(query, "userKey"),
+      name: stringQuery(query, "name"),
+    };
+    const result = await listAdminFavorites(filters);
+    res.json({
+      data: result.rows,
+      pagination: result.pagination,
+      summary: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      },
+    });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin favorites failed:", e?.message || e);
+    res.status(500).json({ error: "Admin favorites failed" });
+  }
+});
+
+app.get("/api/admin/feedback", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const dateRange = resolveDateRange(query);
+    const filters: AdminFeedbackFilters = {
+      dateRange: {
+        startDate: dateRange.startDate,
+        endDateExclusive: dateRange.endDateExclusive,
+      },
+      pagination: resolvePagination(query),
+      feedbackType: stringQuery(query, "feedbackType"),
+      satisfactionValue: stringQuery(query, "satisfactionValue"),
+    };
+    const result = await listAdminFeedback(filters);
+    res.json({
+      data: result.rows,
+      pagination: result.pagination,
+      summary: {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      },
+    });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin feedback failed:", e?.message || e);
+    res.status(500).json({ error: "Admin feedback failed" });
+  }
+});
+
+app.get("/api/admin/export", async (req, res) => {
+  if (!isDbReady()) {
+    res.status(503).json({ error: "Database is not configured" });
+    return;
+  }
+  try {
+    const query = req.query as Record<string, unknown>;
+    const moduleName = stringQuery(query, "module");
+    const dateRange = resolveDateRange(query);
+    const now = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+
+    if (moduleName === "overview") {
+      const overview = await getAdminOverview({
+        startDate: dateRange.startDate,
+        endDateExclusive: dateRange.endDateExclusive,
+      });
+      const rows: Array<Record<string, unknown>> = [
+        {
+          date: "SUMMARY",
+          home_exposure: overview.kpi.home_exposure,
+          click_generate: overview.kpi.click_generate,
+          generate_success: overview.kpi.generate_success,
+          generate_success_rate: toPercent(overview.kpi.generate_success_rate),
+          copy_rate: toPercent(overview.kpi.copy_rate),
+          favorite_rate: toPercent(overview.kpi.favorite_rate),
+          avg_latency_ms: overview.kpi.avg_latency_ms,
+        },
+        ...overview.trend.map((item) => ({
+          ...item,
+          generate_success_rate: toPercent(item.generate_success_rate),
+          copy_rate: toPercent(item.copy_rate),
+          favorite_rate: toPercent(item.favorite_rate),
+        })),
+      ];
+      const csv = toCsv(
+        [
+          "date",
+          "home_exposure",
+          "click_generate",
+          "generate_success",
+          "generate_success_rate",
+          "copy_rate",
+          "favorite_rate",
+          "avg_latency_ms",
+        ],
+        rows
+      );
+      sendCsv(res, `admin-overview-${now}.csv`, csv);
+      return;
+    }
+
+    if (moduleName === "generations") {
+      const result = await listAdminGenerations({
+        dateRange: {
+          startDate: dateRange.startDate,
+          endDateExclusive: dateRange.endDateExclusive,
+        },
+        pagination: { page: 1, pageSize: 100 },
+        isSuccess: parseBooleanQuery(query, "isSuccess"),
+        meaningTag: stringQuery(query, "meaningTag"),
+        styleTag: stringQuery(query, "styleTag"),
+      });
+      const rows = result.rows.map((item) => ({
+        ...item,
+        is_success: item.is_success ? 1 : 0,
+      }));
+      const csv = toCsv(
+        [
+          "generation_id",
+          "user_key",
+          "session_id",
+          "keywords_text",
+          "keywords_count",
+          "meaning_tag",
+          "style_tag",
+          "requested_at",
+          "responded_at",
+          "is_success",
+          "latency_ms",
+          "model_name",
+          "error_code",
+          "result_count",
+        ],
+        rows
+      );
+      sendCsv(res, `admin-generations-${now}.csv`, csv);
+      return;
+    }
+
+    if (moduleName === "events") {
+      const result = await listAdminEvents({
+        dateRange: {
+          startDate: dateRange.startDate,
+          endDateExclusive: dateRange.endDateExclusive,
+        },
+        pagination: { page: 1, pageSize: 100 },
+        eventName: stringQuery(query, "eventName"),
+        generationId: stringQuery(query, "generationId"),
+      });
+      const rows = result.rows.map((item) => ({
+        ...item,
+        is_success: item.is_success ? 1 : 0,
+        properties: item.properties ? JSON.stringify(item.properties) : "",
+      }));
+      const csv = toCsv(
+        [
+          "event_id",
+          "user_key",
+          "session_id",
+          "event_name",
+          "event_time",
+          "page_name",
+          "generation_id",
+          "keywords_count",
+          "meaning_tag",
+          "style_tag",
+          "result_rank",
+          "result_name",
+          "is_success",
+          "latency_ms",
+          "error_code",
+          "properties",
+        ],
+        rows
+      );
+      sendCsv(res, `admin-events-${now}.csv`, csv);
+      return;
+    }
+
+    if (moduleName === "favorites") {
+      const result = await listAdminFavorites({
+        dateRange: {
+          startDate: dateRange.startDate,
+          endDateExclusive: dateRange.endDateExclusive,
+        },
+        pagination: { page: 1, pageSize: 100 },
+        userKey: stringQuery(query, "userKey"),
+        name: stringQuery(query, "name"),
+      });
+      const rows = result.rows.map((item) => ({
+        ...item,
+        style_tags: (item.style_tags || []).join("|"),
+      }));
+      const csv = toCsv(
+        [
+          "user_key",
+          "name",
+          "meaning_title",
+          "meaning_desc",
+          "style_tags",
+          "created_at",
+          "updated_at",
+        ],
+        rows
+      );
+      sendCsv(res, `admin-favorites-${now}.csv`, csv);
+      return;
+    }
+
+    if (moduleName === "feedback") {
+      const result = await listAdminFeedback({
+        dateRange: {
+          startDate: dateRange.startDate,
+          endDateExclusive: dateRange.endDateExclusive,
+        },
+        pagination: { page: 1, pageSize: 100 },
+        feedbackType: stringQuery(query, "feedbackType"),
+        satisfactionValue: stringQuery(query, "satisfactionValue"),
+      });
+      const csv = toCsv(
+        [
+          "user_key",
+          "session_id",
+          "feedback_type",
+          "satisfaction_value",
+          "reason_tag",
+          "content",
+          "page_name",
+          "generation_id",
+          "created_at",
+        ],
+        result.rows.map((item) => ({ ...item }))
+      );
+      sendCsv(res, `admin-feedback-${now}.csv`, csv);
+      return;
+    }
+
+    res.status(400).json({ error: "Invalid module. Expected overview/generations/events/favorites/feedback" });
+  } catch (e: any) {
+    const message = String(e?.message || "");
+    if (message.includes("startDate") || message.includes("date range")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    console.error("Admin export failed:", e?.message || e);
+    res.status(500).json({ error: "Admin export failed" });
   }
 });
 

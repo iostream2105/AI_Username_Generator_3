@@ -13,6 +13,7 @@ const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '�
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
 const LOADING_STAGE_TEXTS = ['正在理解关键词...','正在为你寻找灵感...', '正在创作...', '正在润色...'];
+let homeExposureTrackedInRuntime = false;
 
 function createLocalId() {
   return Math.random().toString(36).substring(2, 10);
@@ -171,6 +172,9 @@ export default function App() {
   };
 
   useEffect(() => {
+    // React StrictMode 在开发环境会触发双挂载，这里做一次运行时去重，避免曝光重复上报
+    if (homeExposureTrackedInRuntime) return;
+    homeExposureTrackedInRuntime = true;
     fireTrack('home_exposure', { page_name: 'home' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
