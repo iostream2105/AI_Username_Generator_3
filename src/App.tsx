@@ -117,6 +117,7 @@ export default function App() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
+  const [isKeywordComposing, setIsKeywordComposing] = useState(false);
 
   // 统一视图切换：同步 React 视图与浏览器 history，保障系统返回键可按层级回退
   const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
@@ -388,51 +389,55 @@ export default function App() {
     }
   };
 
-  const addKeyword = () => {
-    const val = keywordInput.trim().replace(/[,，、]/g, '');
-    // 关键词去重且最多3个，符合 PRD 输入约束
-    if (val && keywords.length < 3 && !keywords.includes(val)) {
-      setKeywords([...keywords, val]);
-      setKeywordInput('');
-      fireTrack('input_keywords', {
-        page_name: 'home',
-        properties: { keyword: val, keyword_count: keywords.length + 1 },
+  const commitKeywordsFromText = (rawText: string) => {
+    const parts = rawText
+      .split(/[\s,，、]+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) {
+      return;
+    }
+
+    const next = [...keywords];
+    const accepted: string[] = [];
+    for (const part of parts) {
+      if (next.length >= 3) break;
+      if (next.includes(part)) continue;
+      next.push(part);
+      accepted.push(part);
+    }
+
+    if (accepted.length > 0) {
+      setKeywords(next);
+      accepted.forEach((kw, idx) => {
+        fireTrack('input_keywords', {
+          page_name: 'home',
+          properties: { keyword: kw, keyword_count: keywords.length + idx + 1 },
+        });
       });
-    } else if (val && keywords.includes(val)) {
-      setKeywordInput('');
     }
   };
 
+  const addKeyword = () => {
+    commitKeywordsFromText(keywordInput);
+    setKeywordInput('');
+  };
+
   const handleKeywordInputChange = (rawValue: string) => {
-    // 兼容移动端软键盘：不依赖 keydown，输入中出现分隔符就立即拆词
-    const hasDelimiter = /[\s,，、]/.test(rawValue);
-    if (!hasDelimiter) {
+    // iOS 输入中会逐字符提交，只有在“明确结束输入”时才拆词，避免错分
+    if (isKeywordComposing) {
       setKeywordInput(rawValue);
       return;
     }
 
-    const segments = rawValue.split(/[\s,，、]+/);
-    const tail = segments.pop() || "";
-    const normalizedExisting = keywords.map((k) => k.trim());
-    const toAppend = segments
-      .map((segment) => segment.trim())
-      .filter(Boolean)
-      .filter((segment) => !normalizedExisting.includes(segment));
-
-    if (toAppend.length > 0 && keywords.length < 3) {
-      const available = 3 - keywords.length;
-      const accepted = toAppend.slice(0, available);
-      const nextKeywords = [...keywords, ...accepted];
-      setKeywords(nextKeywords);
-      accepted.forEach((kw) => {
-        fireTrack('input_keywords', {
-          page_name: 'home',
-          properties: { keyword: kw, keyword_count: nextKeywords.length },
-        });
-      });
+    if (/[\s,，、]$/.test(rawValue)) {
+      commitKeywordsFromText(rawValue);
+      setKeywordInput('');
+      return;
     }
 
-    setKeywordInput(tail);
+    setKeywordInput(rawValue);
   };
 
   const removeKeyword = (index: number) => {
@@ -440,6 +445,7 @@ export default function App() {
   };
 
   const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isKeywordComposing) return;
     // Enter/空格/逗号快速分词；空输入时 Backspace 删除最后一个已选关键词
     if (e.key === 'Enter' || e.key === ' ' || e.key === ',' || e.key === '，') {
       e.preventDefault();
@@ -506,9 +512,12 @@ export default function App() {
         </div>
         <button 
           onClick={() => navigateToView('favorites')}
-          className="p-2 text-brand-800 hover:bg-black/5 rounded-full transition-colors"
+          aria-label="打开我的收藏"
+          title="我的收藏"
+          className="px-3 py-1.5 text-brand-800 hover:bg-black/5 rounded-full transition-colors flex items-center gap-1.5 text-sm"
         >
           <Bookmark size={20} />
+          <span className="text-xs font-medium text-brand-800/80">我的收藏</span>
         </button>
       </header>
 
@@ -520,13 +529,16 @@ export default function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="pt-8"
+              className="pt-4"
             >
-              <h1 className="font-serif text-[32px] leading-[1.3] mb-4 text-brand-900">
-                AI 深度解析你的特质，<br/>定制独一无二的专属网名。
+              <h1 className="font-serif text-[clamp(20px,6.8vw,30px)] leading-[1.35] mb-4 text-brand-900">
+                <span className="block">AI 深度解析你的特质，</span>
+                <span className="block">定制独一无二的专属网名。</span>
               </h1>
-              <p className="text-brand-800/70 mb-10 text-sm leading-relaxed">
-                不仅是一个代号，更是你的个性表达。输入关键词，AI 将结合文学意象与情感共鸣，为你深度创作。
+              <p className="text-brand-800/70 mb-10 text-[clamp(11px,3.5vw,14px)] leading-[1.6]">
+                <span className="block">
+                  不仅是一个代号，更是你的个性表达。输入关键词，AI 将结合文学意象与情感共鸣，为你深度创作。
+                </span>
               </p>
 
               <div className="space-y-8">
@@ -553,13 +565,18 @@ export default function App() {
                         value={keywordInput}
                         onChange={(e) => handleKeywordInputChange(e.target.value)}
                         onKeyDown={handleKeywordKeyDown}
+                        onCompositionStart={() => setIsKeywordComposing(true)}
+                        onCompositionEnd={(e) => {
+                          setIsKeywordComposing(false);
+                          handleKeywordInputChange(e.currentTarget.value);
+                        }}
                         onBlur={addKeyword}
                         placeholder={keywords.length === 0 ? "输入后按空格或回车添加" : "继续输入..."}
                         className="flex-1 bg-transparent border-none outline-none text-brand-900 placeholder:text-brand-800/30 min-w-[120px] text-sm"
                       />
                     )}
                   </div>
-                  <p className="text-xs text-brand-800/50">可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素</p>
+                  <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素</p>
                 </div>
 
                 {/* Meaning & Style Dropdowns */}

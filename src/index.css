@@ -11,6 +11,12 @@
   --color-brand-900: #3D3D2B;
 }
 
+html,
+body,
+#root {
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--color-brand-50);
   color: #1a1a1a;
