@@ -399,6 +399,38 @@ export default function App() {
     }
   };
 
+  const handleKeywordInputChange = (rawValue: string) => {
+    // 兼容移动端软键盘：不依赖 keydown，输入中出现分隔符就立即拆词
+    const hasDelimiter = /[\s,，、]/.test(rawValue);
+    if (!hasDelimiter) {
+      setKeywordInput(rawValue);
+      return;
+    }
+
+    const segments = rawValue.split(/[\s,，、]+/);
+    const tail = segments.pop() || "";
+    const normalizedExisting = keywords.map((k) => k.trim());
+    const toAppend = segments
+      .map((segment) => segment.trim())
+      .filter(Boolean)
+      .filter((segment) => !normalizedExisting.includes(segment));
+
+    if (toAppend.length > 0 && keywords.length < 3) {
+      const available = 3 - keywords.length;
+      const accepted = toAppend.slice(0, available);
+      const nextKeywords = [...keywords, ...accepted];
+      setKeywords(nextKeywords);
+      accepted.forEach((kw) => {
+        fireTrack('input_keywords', {
+          page_name: 'home',
+          properties: { keyword: kw, keyword_count: nextKeywords.length },
+        });
+      });
+    }
+
+    setKeywordInput(tail);
+  };
+
   const removeKeyword = (index: number) => {
     setKeywords(keywords.filter((_, i) => i !== index));
   };
@@ -515,7 +547,7 @@ export default function App() {
                       <input
                         type="text"
                         value={keywordInput}
-                        onChange={(e) => setKeywordInput(e.target.value)}
+                        onChange={(e) => handleKeywordInputChange(e.target.value)}
                         onKeyDown={handleKeywordKeyDown}
                         onBlur={addKeyword}
                         placeholder={keywords.length === 0 ? "输入后按空格或回车添加" : "继续输入..."}
