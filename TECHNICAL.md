@@ -158,3 +158,45 @@
 1. 增加埋点日聚合作业，落地 `analytics_metrics_daily`。
 2. 为 `/api/generate` 和 `/api/track` 增加基础自动化测试。
 3. 分批修复中文乱码文本，并做回归验证。
+
+## 10. 后台管理端增量实现（当前代码已落地）
+### 10.1 前端入口与开关
+- 后台前端页面：`src/AdminApp.tsx`
+- 后台 API 客户端：`src/admin/service.ts`
+- 后台类型定义：`src/admin/types.ts`
+- 入口开关：`src/main.tsx`
+  - 路径命中 `/admin` 时，且 `VITE_ENABLE_ADMIN` 开启，渲染后台页面
+  - 其他情况渲染 App 页面
+
+### 10.2 后端接口与保护
+`server/index.ts` 已新增后台接口：
+- `GET /api/admin/overview`
+- `GET /api/admin/generations`
+- `GET /api/admin/events`
+- `GET /api/admin/favorites`
+- `GET /api/admin/feedback`
+- `GET /api/admin/export`
+
+接口保护：
+- `ADMIN_LOCAL_ONLY` 默认开启
+- 仅允许 localhost/127.0.0.1/::1 访问 `/api/admin/*`
+
+### 10.3 查询与导出策略
+- 默认时间窗口：近 7 天
+- 日期范围上限：31 天
+- 分页默认：20，上限：100
+- 导出：CSV（UTF-8 BOM）
+- 总览趋势：按天聚合并返回倒序（最新日期优先）
+
+## 11. 用户端近期实现补充
+### 11.1 输入与埋点
+- 关键词输入增加输入法组合态保护，降低 iOS 输入法分词错乱
+- `home_exposure` 增加运行时去重，避免开发态 StrictMode 双触发导致重复曝光
+
+### 11.2 交互与展示
+- 首页顶部收藏入口增加“我的收藏”文案提示
+- 首页主副文案、关键词说明文案针对移动端做了字号与布局微调
+
+### 11.3 移动端兼容
+- `index.html` 增加禁止缩放配置与 iOS gesture 兜底拦截
+- `src/index.css` 增加全局横向溢出隐藏，减少小屏横向滑动问题

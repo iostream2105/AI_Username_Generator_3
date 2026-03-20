@@ -10,6 +10,8 @@
 
 ## 项目结构
 - `src/`：React + Vite 前端
+- `src/AdminApp.tsx`：本地后台管理端页面（`/admin`）
+- `src/admin/`：后台管理端 API 封装与类型定义
 - `src/services/ai.ts`：前端 API 请求与埋点上报封装
 - `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
 - `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点 + 用户反馈）
@@ -17,6 +19,11 @@
 - `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
 - `Dockerfile`：CloudRun 容器构建配置
+
+## 后台管理端（本地）
+- 前端入口：`/admin`
+- 默认能力：总览看板、生成记录、事件日志、收藏、反馈、CSV 导出
+- 详情文档见：`ADMIN_DASHBOARD.md`
 
 ## 本地开发
 前置条件：Node.js 18+
@@ -57,6 +64,14 @@ npm run dev
 - `POST /api/favorites`：新增收藏
 - `DELETE /api/favorites`：取消收藏
 
+后台管理端 API（只读）：
+- `GET /api/admin/overview`
+- `GET /api/admin/generations`
+- `GET /api/admin/events`
+- `GET /api/admin/favorites`
+- `GET /api/admin/feedback`
+- `GET /api/admin/export`
+
 ## 生成策略说明（当前实现）
 - 模型：`doubao-seed-1-8-251228`（结构化输出）。
 - 后端会使用 `json_schema` 约束模型返回结构，优先解析 `{"items":[...]}`。
@@ -96,8 +111,14 @@ npm run dev
 ```bash
 npm run lint
 npm run build
+npm run build:prod
+npm run build:local-admin
 npm run preview
 ```
+
+说明：
+- `npm run build:prod`：用于生产构建，脚本内会强制 `VITE_ENABLE_ADMIN=false`，并注入线上 `VITE_API_BASE_URL`。
+- `npm run build:local-admin`：用于本地后台构建，强制 `VITE_ENABLE_ADMIN=true`。
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
@@ -108,9 +129,11 @@ npm run preview
 - 环境 ID：`ai-username-env-2glikc1y1cb803fb`
 - 主服务：`ai-username-api-v2`
 - 生产构建前，请将 `VITE_API_BASE_URL` 设置为 CloudRun 域名
+- 后台 API 默认受 `ADMIN_LOCAL_ONLY=true` 保护，仅允许本地访问（`/api/admin/*`）。
 
 ## 文档索引
 - 协作规范：`AGENTS.md`
 - 技术文档：`TECHNICAL.md`
+- 后台文档：`ADMIN_DASHBOARD.md`
 - PRD：`PRD.md`
 - 数据库结构：`sql/app_schema.sql`
