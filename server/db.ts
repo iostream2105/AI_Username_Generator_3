@@ -1,5 +1,8 @@
 import mysql, { Pool, RowDataPacket } from "mysql2/promise";
 
+// ------------------------------
+// App 端写操作数据结构
+// ------------------------------
 export interface FavoriteRecord {
   userKey: string;
   name: string;
@@ -73,6 +76,9 @@ export interface UserFeedbackRecord {
   generationId?: string;
 }
 
+// ------------------------------
+// 后台管理端查询结构
+// ------------------------------
 export interface AdminDateRange {
   startDate: string;
   endDateExclusive: string;
@@ -230,6 +236,9 @@ function resolveDbConfig() {
   return { host, user, password, database, port };
 }
 
+// 初始化连接池：
+// - 仅负责建立连接配置，不在此处探活查询
+// - 返回 false 表示“配置缺失”，由上层决定是否继续启动服务
 export async function initDb() {
   const config = resolveDbConfig();
   if (!config) {
@@ -255,10 +264,12 @@ export async function initDb() {
   return true;
 }
 
+// 供上层快速判断数据库是否可用（例如接口返回 503）
 export function isDbReady() {
   return Boolean(pool);
 }
 
+// 统一获取数据库连接池，避免每个函数重复判空逻辑
 function getDb() {
   if (!pool) {
     throw new Error("DB is not initialized");
@@ -266,6 +277,8 @@ function getDb() {
   return pool;
 }
 
+// 统一分页返回结构：
+// - totalPages 至少为 1，前端分页组件无需额外判零
 function calcPaginationResult(total: number, pagination: AdminPagination): AdminPaginationResult {
   const safeTotal = Math.max(0, total);
   const totalPages = Math.max(1, Math.ceil(safeTotal / pagination.pageSize));
@@ -277,11 +290,13 @@ function calcPaginationResult(total: number, pagination: AdminPagination): Admin
   };
 }
 
+// 安全除法：分母为 0 时返回 0，避免 NaN 污染统计结果
 function safeDivide(numerator: number, denominator: number) {
   if (!denominator) return 0;
   return Number((numerator / denominator).toFixed(4));
 }
 
+// 生成 [startDate, endDateExclusive) 的自然日数组，用于补齐“无数据日期”
 function dayRange(startDate: string, endDateExclusive: string) {
   const result: string[] = [];
   const cursor = new Date(`${startDate}T00:00:00.000Z`);
@@ -293,6 +308,8 @@ function dayRange(startDate: string, endDateExclusive: string) {
   return result;
 }
 
+// 归一化 SQL 日期：
+// mysql2 在不同配置下可能返回 Date 或字符串，这里统一转 YYYY-MM-DD
 function normalizeSqlDate(value: unknown) {
   if (!value) return "";
   if (value instanceof Date) {
@@ -303,6 +320,7 @@ function normalizeSqlDate(value: unknown) {
   return matched ? matched[0] : text.slice(0, 10);
 }
 
+// 安全解析 JSON 对象字段（例如 properties），解析失败不抛错直接返回 null
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
   if (typeof value === "string") {
@@ -319,6 +337,10 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+// 后台总览：
+// 1) 从事实事件表聚合曝光/点击/成功/复制/收藏
+// 2) 从生成批次表聚合平均耗时
+// 3) 生成按天趋势并补齐空白日期，最终按日期倒序返回
 export async function getAdminOverview(dateRange: AdminDateRange): Promise<AdminOverviewResult> {
   const db = getDb();
   const [summaryRows] = await db.query<RowDataPacket[]>(
@@ -424,6 +446,9 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
   };
 }
 
+// 后台-生成记录查询：
+// - 支持成功状态、寓意、风格过滤
+// - 先 count 再分页查询，保证前端可展示完整分页信息
 export async function listAdminGenerations(filters: AdminGenerationFilters): Promise<AdminListResult<AdminGenerationRow>> {
   const db = getDb();
   const where: string[] = ["requested_at >= ?", "requested_at < ?"];
@@ -495,6 +520,9 @@ export async function listAdminGenerations(filters: AdminGenerationFilters): Pro
   };
 }
 
+// 后台-事件日志查询：
+// - 支持 eventName 与 generationId 过滤
+// - properties 字段做安全解析，避免脏数据导致接口失败
 export async function listAdminEvents(filters: AdminEventFilters): Promise<AdminListResult<AdminEventRow>> {
   const db = getDb();
   const where: string[] = ["event_time >= ?", "event_time < ?"];
@@ -566,6 +594,9 @@ export async function listAdminEvents(filters: AdminEventFilters): Promise<Admin
   };
 }
 
+// 后台-收藏列表查询：
+// - userKey/name 使用 LIKE，便于模糊检索
+// - style_tags_json 统一解析为 string[]
 export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise<AdminListResult<AdminFavoriteRow>> {
   const db = getDb();
   const where: string[] = ["created_at >= ?", "created_at < ?"];
@@ -619,6 +650,9 @@ export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise
   };
 }
 
+// 后台-反馈列表查询：
+// - 支持反馈类型与满意度过滤
+// - 统一按创建时间倒序，优先展示最新用户反馈
 export async function listAdminFeedback(filters: AdminFeedbackFilters): Promise<AdminListResult<AdminFeedbackRow>> {
   const db = getDb();
   const where: string[] = ["created_at >= ?", "created_at < ?"];
@@ -731,6 +765,7 @@ export async function upsertFavorite(record: FavoriteRecord) {
   );
 }
 
+// 删除单条收藏（按 userKey + name 作为逻辑唯一键）
 export async function deleteFavorite(userKey: string, name: string) {
   const db = getDb();
 
@@ -943,7 +978,8 @@ export async function insertUserFeedback(record: UserFeedbackRecord) {
   );
 }
 
-// 兼容 MySQL JSON 字段在不同驱动返回类型下的解析差异
+// 兼容 MySQL JSON 字段在不同驱动返回类型下的解析差异：
+// - 可能是数组、字符串、对象，统一收敛为 string[]
 function parseStyleTags(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map(String);

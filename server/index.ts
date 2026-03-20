@@ -26,14 +26,18 @@ import {
   upsertGenerationResults,
 } from "./db";
 
+// 本地开发读取 .env.local；生产环境默认依赖平台注入的环境变量。
+// 备注：当前仍保留直接读取 .env.local 的行为，便于本地快速调试。
 dotenv.config({ path: ".env.local" });
 
 const app = express();
+// 前端白名单：支持逗号分隔多个域名，便于本地/预发/线上同时配置。
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
+// 后台接口本地访问保护开关：默认 true，仅放行 loopback 来源。
 const ADMIN_LOCAL_ONLY = process.env.ADMIN_LOCAL_ONLY !== "false";
 
 // 开发环境放行私网来源，便于手机同局域网调试；生产仍按白名单校验
@@ -52,6 +56,10 @@ function isPrivateNetworkOrigin(origin: string) {
 
 app.use(
   cors({
+    // 统一 CORS 策略：
+    // 1) 无 Origin（如 curl/同源）放行
+    // 2) 命中白名单放行
+    // 3) 开发环境允许私网来源，方便手机同网段调试
     origin: (origin, callback) => {
       if (
         !origin ||
@@ -68,6 +76,7 @@ app.use(
 );
 app.use(express.json());
 
+// 业务固定模型名：用于写库统计与问题排查时的模型维度追踪。
 const MODEL_NAME = "doubao-seed-1-8-251228";
 
 const client = new OpenAI({
@@ -285,6 +294,8 @@ async function requestModelContent(prompt: string, temperature = 0.8): Promise<s
   return completion.choices[0]?.message?.content || "";
 }
 
+// --- admin 访问控制与查询参数解析辅助函数 ---
+// 后台接口只读且默认本地使用，这里集中处理 host/origin 与参数安全边界。
 function isLoopbackHost(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
@@ -348,6 +359,7 @@ function resolveDateRange(query: Record<string, unknown>) {
     throw new Error("startDate must be less than or equal to endDate");
   }
 
+  // 防止一次性拉取超大时间窗口导致慢查询。
   const days = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
   if (days > 31) {
     throw new Error("date range must be within 31 days");
@@ -363,6 +375,7 @@ function resolveDateRange(query: Record<string, unknown>) {
 function resolvePagination(query: Record<string, unknown>): AdminPagination {
   const page = Math.max(1, Number.parseInt(String(query.page || "1"), 10) || 1);
   const pageSizeRaw = Number.parseInt(String(query.pageSize || "20"), 10) || 20;
+  // 明细分页上限统一 100，避免极端 pageSize 拖慢数据库。
   const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
   return { page, pageSize };
 }
@@ -400,6 +413,7 @@ function sendCsv(res: express.Response, fileName: string, csvContent: string) {
   res.send(csvContent);
 }
 
+// admin 路由级守卫：线上默认不开放后台查询能力。
 app.use("/api/admin", (req, res, next) => {
   if (!ADMIN_LOCAL_ONLY) {
     next();
@@ -412,6 +426,10 @@ app.use("/api/admin", (req, res, next) => {
   res.status(403).json({ error: "Admin API is restricted to localhost" });
 });
 
+// 生成主接口：
+// - 负责调用模型生成候选
+// - 负责写入生成批次/结果/事件日志
+// - 主流程失败时返回 500，并写失败埋点用于追踪
 app.post("/api/generate", async (req, res) => {
   const {
     keywords,
@@ -457,6 +475,7 @@ app.post("/api/generate", async (req, res) => {
 }`;
 
   try {
+    // 写入“发起生成”批次记录，作为后续成功/失败更新基准行。
     await safeTrack(
       () =>
         upsertGenerationBatchStart({
@@ -526,6 +545,7 @@ app.post("/api/generate", async (req, res) => {
 
     const latencyMs = Date.now() - requestStartedAt;
 
+    // 更新生成批次成功状态与耗时。
     await safeTrack(
       () =>
         finishGenerationBatch({
@@ -537,6 +557,7 @@ app.post("/api/generate", async (req, res) => {
       "finishGenerationBatch success"
     );
 
+    // 写入 3 条结果明细，供后续复制/收藏计数回填。
     await safeTrack(
       () =>
         upsertGenerationResults(
@@ -582,6 +603,7 @@ app.post("/api/generate", async (req, res) => {
     const latencyMs = Date.now() - requestStartedAt;
     const errorCode = e?.code || "AI_GENERATION_FAILED";
 
+    // 失败路径同样回写批次状态与失败事件，保证统计口径完整。
     await safeTrack(
       () =>
         finishGenerationBatch({
@@ -617,6 +639,7 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
+// 通用埋点接口：负责记录事实事件，并在复制/收藏时同步回填结果计数。
 app.post("/api/track", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -669,6 +692,7 @@ app.post("/api/track", async (req, res) => {
   }
 });
 
+// 反馈接口：支持结果满意度反馈与通用建议反馈。
 app.post("/api/feedback", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -712,6 +736,7 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
+// 收藏查询：用于 App 端“我的收藏”页面初始化。
 app.get("/api/favorites", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -733,6 +758,7 @@ app.get("/api/favorites", async (req, res) => {
   }
 });
 
+// 收藏新增/更新：同名收藏走 upsert，避免重复行。
 app.post("/api/favorites", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -760,6 +786,7 @@ app.post("/api/favorites", async (req, res) => {
   }
 });
 
+// 收藏删除：按 userKey + name 定位删除。
 app.delete("/api/favorites", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -781,6 +808,8 @@ app.delete("/api/favorites", async (req, res) => {
   }
 });
 
+// --- admin 只读接口 ---
+// 统一特征：默认近 7 天，可自定义时间范围，包含参数校验与错误分级。
 app.get("/api/admin/overview", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -972,6 +1001,7 @@ app.get("/api/admin/feedback", async (req, res) => {
   }
 });
 
+// 导出接口：复用同一套筛选参数，按模块导出 UTF-8 BOM CSV，便于 Excel 打开。
 app.get("/api/admin/export", async (req, res) => {
   if (!isDbReady()) {
     res.status(503).json({ error: "Database is not configured" });
@@ -1173,6 +1203,9 @@ app.get("/api/admin/export", async (req, res) => {
 
 const PORT = Number(process.env.PORT || 3001);
 
+// 启动流程：
+// 1) 先尝试初始化 DB（失败不阻断服务启动）
+// 2) 再监听 HTTP 端口，保证无库时仍能返回显式 503
 void (async () => {
   try {
     const ready = await initDb();

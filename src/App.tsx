@@ -7,6 +7,7 @@ import { GeneratedName, GenerateParams } from './types';
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
 
+// 首页可选标签：参与生成请求，也用于筛选埋点
 const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
 const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
@@ -16,10 +17,12 @@ const LOADING_STAGE_TEXTS = ['正在理解关键词...','正在为你寻找灵�
 let homeExposureTrackedInRuntime = false;
 
 function createLocalId() {
+  // 仅用于前端渲染 key，不作为业务主键
   return Math.random().toString(36).substring(2, 10);
 }
 
 function getOrCreateUserKey() {
+  // userKey 跨会话复用，承担“同一用户”归因
   const existing = localStorage.getItem(USER_KEY_STORAGE);
   if (existing) return existing;
 
@@ -29,6 +32,7 @@ function getOrCreateUserKey() {
 }
 
 function getOrCreateSessionKey() {
+  // sessionId 仅在当前标签页生命周期内有效，用于区分一次访问会话
   const existing = sessionStorage.getItem(SESSION_KEY_STORAGE);
   if (existing) return existing;
 
@@ -38,10 +42,12 @@ function getOrCreateSessionKey() {
 }
 
 function createGenerationId() {
+  // 每次生成请求分配一个批次 ID，用于关联结果/埋点/反馈
   return `gen_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 }
 
 const CustomSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (val: string) => void, options: string[], placeholder: string }) => {
+  // 局部展开态；值本身由父组件托管（受控组件）
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="relative">
@@ -95,15 +101,16 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 };
 
 export default function App() {
+  // 页面主状态机：home -> loading -> results / favorites
   const [view, setView] = useState<AppView>('home');
   
-  // Form State
+  // 输入区状态：关键词 + 寓意标签 + 风格标签
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
   const [meaning, setMeaning] = useState('');
   const [style, setStyle] = useState('');
   
-  // Results State
+  // 结果区状态：生成结果、收藏、复制提示、反馈态
   const [results, setResults] = useState<GeneratedName[]>([]);
   const [favorites, setFavorites] = useState<GeneratedName[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -140,6 +147,7 @@ export default function App() {
   };
 
   const goBackInApp = () => {
+    // 优先回退浏览器历史；若没有历史栈则兜底回首页
     if (typeof window === 'undefined') return;
     if (window.history.length > 1) {
       window.history.back();
@@ -162,6 +170,7 @@ export default function App() {
     error_code: string;
     properties: Record<string, unknown>;
   }> = {}) => {
+    // 埋点失败只打印日志，不影响主流程交互
     void trackEvent({
       event_name: eventName,
       user_key: userKey,
@@ -222,6 +231,7 @@ export default function App() {
     let mounted = true;
 
     const loadFavorites = async () => {
+      // mounted 守卫：避免卸载后 setState 触发告警
       try {
         const items = await fetchFavorites(userKey);
         if (!mounted) return;
@@ -246,6 +256,7 @@ export default function App() {
   }, [userKey]);
   
   const handleGenerate = async () => {
+    // 若输入框尚有未确认文本，点击生成时会自动并入关键词
     let finalKeywords = [...keywords];
     if (keywordInput.trim() && finalKeywords.length < 3) {
       finalKeywords.push(keywordInput.trim());
@@ -264,6 +275,7 @@ export default function App() {
     
     setView('loading');
     try {
+      // keywords 统一拼接后交给后端解析，保持请求结构简洁
       const params: GenerateParams = {
         keywords: finalKeywords.join('、'),
         userKey,
@@ -345,6 +357,7 @@ export default function App() {
   
   // 收藏状态与后端保持一致，避免只在本地内存变更导致刷新丢失
   const toggleFavorite = async (name: GeneratedName) => {
+    // 以 name 作为收藏判重键，前后端保持同一规则
     const exists = favorites.some(f => f.name === name.name);
 
     try {
@@ -390,6 +403,7 @@ export default function App() {
   };
 
   const commitKeywordsFromText = (rawText: string) => {
+    // 关键词标准化入口：兼容空白符、中文逗号、英文逗号、顿号
     const parts = rawText
       .split(/[\s,，、]+/)
       .map((segment) => segment.trim())
@@ -399,6 +413,7 @@ export default function App() {
       return;
     }
 
+    // 最多 3 个且去重；仅新增词触发 input_keywords 埋点
     const next = [...keywords];
     const accepted: string[] = [];
     for (const part of parts) {
@@ -420,6 +435,7 @@ export default function App() {
   };
 
   const addKeyword = () => {
+    // Enter/空格/失焦等统一走该函数，保证分词行为一致
     commitKeywordsFromText(keywordInput);
     setKeywordInput('');
   };
@@ -441,6 +457,7 @@ export default function App() {
   };
 
   const removeKeyword = (index: number) => {
+    // 删除指定下标关键词
     setKeywords(keywords.filter((_, i) => i !== index));
   };
 
@@ -524,6 +541,7 @@ export default function App() {
       <main className="flex-1 px-6 pb-24 overflow-y-auto z-10">
         <AnimatePresence mode="wait">
           {view === 'home' && (
+            // 首页：输入关键词 + 选择偏好 + 示例 + 发起生成
             <motion.div
               key="home"
               initial={{ opacity: 0, x: -20 }}
@@ -658,6 +676,7 @@ export default function App() {
 
           {/* loading 作为中间态，不入 history，防止返回键落在无意义页面 */}
           {view === 'loading' && (
+            // 加载页：仅用于等待反馈，不纳入 history 独立层级
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -672,6 +691,7 @@ export default function App() {
           )}
 
           {view === 'results' && (
+            // 结果页：展示生成结果，并提供复制/收藏/满意度反馈
             <motion.div
               key="results"
               initial={{ opacity: 0, x: 20 }}
@@ -774,6 +794,7 @@ export default function App() {
           )}
 
           {view === 'favorites' && (
+            // 收藏页：复用结果卡片，支持返回与空态展示
             <motion.div
               key="favorites"
               initial={{ opacity: 0, y: 20 }}
