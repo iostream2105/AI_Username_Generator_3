@@ -15,10 +15,11 @@
 - `src/services/ai.ts`：前端 API 请求与埋点上报封装
 - `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
 - `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点 + 用户反馈）
-- `cloudfunctions/generateApi/`：云函数备选实现
 - `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
 - `Dockerfile`：CloudRun 容器构建配置
+
+说明：`cloudfunctions/generateApi/` 备用云函数方案已下线，当前仅保留 CloudRun 后端。
 
 ## 后台管理端
 - 前端入口：`/admin`

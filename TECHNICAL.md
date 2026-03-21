@@ -6,7 +6,7 @@
 - 后端：Express + OpenAI 兼容 SDK（调用豆包）
 - 数据库：CloudBase MySQL（收藏与埋点写库）
 - 部署：CloudBase 静态托管（前端）+ CloudRun（后端）
-- 备选后端：CloudBase HTTP 云函数（`cloudfunctions/generateApi/`）
+- 当前后端形态：CloudRun（已移除备用云函数方案）
 
 主流程：
 1. 用户输入关键词（可选寓意和风格）
@@ -23,7 +23,6 @@
 - `src/types.ts`：前端类型定义
 - `server/index.ts`：后端入口、CORS、模型调用与业务 API
 - `server/db.ts`：MySQL 连接与数据访问层
-- `cloudfunctions/generateApi/`：云函数版本 API（备用方案）
 - `sql/app_schema.sql`：数据库结构 SQL（埋点 + 收藏 + 反馈）
 - `sql/analytics_tracking_design.md`：事件命名与指标映射
 - `cloudbaserc.json`：CloudBase 环境与云托管服务指向

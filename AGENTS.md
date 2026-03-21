@@ -10,7 +10,6 @@
 - `src/services/ai.ts`：前端 API 请求层（生成、埋点、收藏、反馈）。
 - `server/index.ts`：后端 API 服务（豆包生成、埋点、收藏、反馈）。
 - `server/db.ts`：MySQL 数据访问层（埋点/收藏/反馈）。
-- `cloudfunctions/generateApi/`：可选云函数后端（备用方案）。
 - `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）。
 - `sql/analytics_tracking_design.md`：埋点事件定义与指标映射。
 - `Dockerfile`、`cloudbaserc.json`：CloudRun 部署相关配置。
