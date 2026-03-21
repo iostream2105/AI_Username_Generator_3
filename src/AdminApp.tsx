@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
-  buildExportUrl,
+  adminLogin,
+  clearAdminToken,
+  exportAdminCsv,
+  getAdminToken,
   getEvents,
   getFavorites,
   getFeedback,
@@ -102,6 +105,12 @@ function TopActions({
 
 export default function AdminApp() {
   const defaults = useMemo(() => getDefaultDateRange(), []);
+  const [isAuthed, setIsAuthed] = useState(Boolean(getAdminToken()));
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [startDate, setStartDate] = useState(defaults.startDate);
   const [endDate, setEndDate] = useState(defaults.endDate);
@@ -137,6 +146,8 @@ export default function AdminApp() {
   const [satisfactionValue, setSatisfactionValue] = useState("");
 
   useEffect(() => {
+    if (!isAuthed) return;
+
     const load = async () => {
       setLoading(true);
       setError("");
@@ -197,13 +208,21 @@ export default function AdminApp() {
         setFeedbackRows(res.data);
         setFeedbackPagination(res.pagination);
       } catch (e: any) {
-        setError(String(e?.message || "加载失败"));
+        const message = String(e?.message || "加载失败");
+        if (message.includes("401") || message.includes("Unauthorized")) {
+          clearAdminToken();
+          setIsAuthed(false);
+          setLoginError("登录已过期，请重新登录。");
+          return;
+        }
+        setError(message);
       } finally {
         setLoading(false);
       }
     };
     void load();
   }, [
+    isAuthed,
     activeTab,
     startDate,
     endDate,
@@ -224,28 +243,121 @@ export default function AdminApp() {
   ]);
 
   const onRefresh = () => setReloadKey((prev) => prev + 1);
-  const onExport = () => {
-    let url = "";
-    if (activeTab === "overview") {
-      url = buildExportUrl("overview", { startDate, endDate });
-    } else if (activeTab === "generations") {
-      url = buildExportUrl("generations", { startDate, endDate, isSuccess, meaningTag, styleTag });
-    } else if (activeTab === "events") {
-      url = buildExportUrl("events", { startDate, endDate, eventName, generationId: eventGenerationId });
-    } else if (activeTab === "favorites") {
-      url = buildExportUrl("favorites", { startDate, endDate, userKey: favoriteUserKey, name: favoriteName });
-    } else {
-      url = buildExportUrl("feedback", { startDate, endDate, feedbackType, satisfactionValue });
+
+  const onExport = async () => {
+    try {
+      let exported: { blob: Blob; fileName: string };
+      if (activeTab === "overview") {
+        exported = await exportAdminCsv("overview", { startDate, endDate });
+      } else if (activeTab === "generations") {
+        exported = await exportAdminCsv("generations", { startDate, endDate, isSuccess, meaningTag, styleTag });
+      } else if (activeTab === "events") {
+        exported = await exportAdminCsv("events", { startDate, endDate, eventName, generationId: eventGenerationId });
+      } else if (activeTab === "favorites") {
+        exported = await exportAdminCsv("favorites", { startDate, endDate, userKey: favoriteUserKey, name: favoriteName });
+      } else {
+        exported = await exportAdminCsv("feedback", { startDate, endDate, feedbackType, satisfactionValue });
+      }
+
+      const objectUrl = URL.createObjectURL(exported.blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = exported.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e: any) {
+      const message = String(e?.message || "导出失败");
+      if (message.includes("401") || message.includes("Unauthorized")) {
+        clearAdminToken();
+        setIsAuthed(false);
+        setLoginError("登录已过期，请重新登录。");
+        return;
+      }
+      setError(message);
     }
-    window.open(url, "_blank");
   };
+
+  const handleLogin = async () => {
+    if (!loginUsername.trim() || !loginPassword) {
+      setLoginError("请输入账号和密码");
+      return;
+    }
+
+    setLoginSubmitting(true);
+    setLoginError("");
+    try {
+      await adminLogin(loginUsername.trim(), loginPassword);
+      setIsAuthed(true);
+      setLoginPassword("");
+      setReloadKey((prev) => prev + 1);
+    } catch (e: any) {
+      setLoginError(String(e?.message || "登录失败"));
+    } finally {
+      setLoginSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearAdminToken();
+    setIsAuthed(false);
+    setLoginPassword("");
+  };
+
+  if (!isAuthed) {
+    return (
+      <div className="min-h-screen bg-brand-50 px-6 py-6 flex items-center justify-center">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-sm">
+          <h1 className="font-serif text-2xl text-brand-900">后台管理登录</h1>
+          <p className="mt-1 text-sm text-brand-800/70">请输入管理员账号密码</p>
+          <div className="mt-5 space-y-3">
+            <input
+              value={loginUsername}
+              onChange={(e) => setLoginUsername(e.target.value)}
+              placeholder="账号"
+              className="w-full rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
+            />
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              placeholder="密码"
+              className="w-full rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleLogin();
+              }}
+            />
+            {loginError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{loginError}</p>}
+            <button
+              onClick={() => void handleLogin()}
+              disabled={loginSubmitting}
+              className="w-full rounded-lg bg-[#5A5A40] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {loginSubmitting ? "登录中..." : "登录"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-50 px-6 py-6">
       <div className="mx-auto max-w-[1280px]">
         <header className="mb-6 rounded-2xl bg-white p-4 shadow-sm">
-          <h1 className="font-serif text-3xl text-brand-900">名有意 后台管理端（本地）</h1>
-          <p className="mt-1 text-sm text-brand-800/70">只读分析面板，默认近 7 天，手动刷新</p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="font-serif text-3xl text-brand-900">名有意 后台管理端</h1>
+              <p className="mt-1 text-sm text-brand-800/70">只读分析面板，默认近 7 天，手动刷新</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-brand-900/10 bg-white px-3 py-2 text-sm"
+            >
+              退出登录
+            </button>
+          </div>
         </header>
 
         <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
@@ -285,7 +397,7 @@ export default function AdminApp() {
         </div>
 
         <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <TopActions title={TAB_LABELS[activeTab]} onRefresh={onRefresh} onExport={onExport} />
+          <TopActions title={TAB_LABELS[activeTab]} onRefresh={onRefresh} onExport={() => void onExport()} />
           {error && <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</p>}
           {loading && <p className="mb-3 text-sm text-brand-800/70">加载中...</p>}
 
@@ -310,15 +422,9 @@ export default function AdminApp() {
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-brand-900/10 p-3">
-                  生成成功率：{overview.kpi.generate_success_rate}%
-                </div>
-                <div className="rounded-xl border border-brand-900/10 p-3">
-                  复制率：{overview.kpi.copy_rate}%
-                </div>
-                <div className="rounded-xl border border-brand-900/10 p-3">
-                  收藏率：{overview.kpi.favorite_rate}%
-                </div>
+                <div className="rounded-xl border border-brand-900/10 p-3">生成成功率：{overview.kpi.generate_success_rate}%</div>
+                <div className="rounded-xl border border-brand-900/10 p-3">复制率：{overview.kpi.copy_rate}%</div>
+                <div className="rounded-xl border border-brand-900/10 p-3">收藏率：{overview.kpi.favorite_rate}%</div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-sm">
@@ -473,9 +579,7 @@ export default function AdminApp() {
                         <td>{row.result_name || "-"}</td>
                         <td>{row.is_success ? "1" : "0"}</td>
                         <td>{row.error_code || "-"}</td>
-                        <td className="max-w-[420px] break-all">
-                          {row.properties ? JSON.stringify(row.properties) : "-"}
-                        </td>
+                        <td className="max-w-[420px] break-all">{row.properties ? JSON.stringify(row.properties) : "-"}</td>
                       </tr>
                     ))}
                   </tbody>

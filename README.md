@@ -10,7 +10,7 @@
 
 ## 项目结构
 - `src/`：React + Vite 前端
-- `src/AdminApp.tsx`：本地后台管理端页面（`/admin`）
+- `src/AdminApp.tsx`：后台管理端页面（`/admin`）
 - `src/admin/`：后台管理端 API 封装与类型定义
 - `src/services/ai.ts`：前端 API 请求与埋点上报封装
 - `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
@@ -20,9 +20,11 @@
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
 - `Dockerfile`：CloudRun 容器构建配置
 
-## 后台管理端（本地）
+## 后台管理端
 - 前端入口：`/admin`
 - 默认能力：总览看板、生成记录、事件日志、收藏、反馈、CSV 导出
+- 本地与线上均可访问后台页面（页面路由不再受环境开关控制）
+- 后台接口采用账号密码登录鉴权（`POST /api/admin/login` + Bearer Token）
 - 详情文档见：`ADMIN_DASHBOARD.md`
 
 ## 本地开发
@@ -65,12 +67,17 @@ npm run dev
 - `DELETE /api/favorites`：取消收藏
 
 后台管理端 API（只读）：
+- `POST /api/admin/login`
 - `GET /api/admin/overview`
 - `GET /api/admin/generations`
 - `GET /api/admin/events`
 - `GET /api/admin/favorites`
 - `GET /api/admin/feedback`
 - `GET /api/admin/export`
+
+说明：
+- `POST /api/admin/login` 使用账号密码换取 token。
+- 其余 `/api/admin/*` 接口需要携带请求头：`Authorization: Bearer <token>`。
 
 ## 生成策略说明（当前实现）
 - 模型：`doubao-seed-1-8-251228`（结构化输出）。
@@ -117,8 +124,8 @@ npm run preview
 ```
 
 说明：
-- `npm run build:prod`：用于生产构建，脚本内会强制 `VITE_ENABLE_ADMIN=false`，并注入线上 `VITE_API_BASE_URL`。
-- `npm run build:local-admin`：用于本地后台构建，强制 `VITE_ENABLE_ADMIN=true`。
+- `npm run build:prod`：用于生产构建，并注入线上 `VITE_API_BASE_URL`。
+- `npm run build:local-admin`：保留为后台构建脚本别名（当前行为等同于 `vite build`）。
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
@@ -129,7 +136,10 @@ npm run preview
 - 环境 ID：`ai-username-env-2glikc1y1cb803fb`
 - 主服务：`ai-username-api-v2`
 - 生产构建前，请将 `VITE_API_BASE_URL` 设置为 CloudRun 域名
-- 后台 API 默认受 `ADMIN_LOCAL_ONLY=true` 保护，仅允许本地访问（`/api/admin/*`）。
+- 后台接口始终支持本地与线上访问，不再区分 `ADMIN_LOCAL_ONLY` / `ADMIN_REQUIRE_AUTH` / `VITE_ENABLE_ADMIN`（这些开关已下线）。
+- 后台登录仅依赖：
+  - `ADMIN_USERNAME=你的后台账号`
+  - `ADMIN_PASSWORD=你的后台密码`
 
 ## 文档索引
 - 协作规范：`AGENTS.md`

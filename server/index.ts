@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import crypto from "crypto";
 import {
   AdminFeedbackFilters,
   AdminFavoriteFilters,
@@ -37,8 +38,13 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
   .map((item) => item.trim())
   .filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
-// 后台接口本地访问保护开关：默认 true，仅放行 loopback 来源。
-const ADMIN_LOCAL_ONLY = process.env.ADMIN_LOCAL_ONLY !== "false";
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const ADMIN_TOKEN_EXPIRE_HOURS = Number(process.env.ADMIN_TOKEN_EXPIRE_HOURS || 12);
+const ADMIN_TOKEN_SECRET = crypto
+  .createHash("sha256")
+  .update(`ai-admin-token:${ADMIN_USERNAME}:${ADMIN_PASSWORD}`)
+  .digest("hex");
 
 // 开发环境放行私网来源，便于手机同局域网调试；生产仍按白名单校验
 function isPrivateNetworkOrigin(origin: string) {
@@ -135,6 +141,11 @@ interface FeedbackBody {
   content?: string;
   pageName?: string;
   generationId?: string;
+}
+
+interface AdminLoginBody {
+  username?: string;
+  password?: string;
 }
 
 interface NameItem {
@@ -413,17 +424,125 @@ function sendCsv(res: express.Response, fileName: string, csvContent: string) {
   res.send(csvContent);
 }
 
+function toBase64Url(input: string) {
+  return Buffer.from(input, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(input: string) {
+  const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function signAdminToken(payloadBase64Url: string) {
+  return crypto
+    .createHmac("sha256", ADMIN_TOKEN_SECRET)
+    .update(payloadBase64Url)
+    .digest("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function createAdminToken(username: string) {
+  const expiresAt = Date.now() + ADMIN_TOKEN_EXPIRE_HOURS * 60 * 60 * 1000;
+  const payload = {
+    username,
+    expiresAt,
+    nonce: createEventId("adm"),
+  };
+  const payloadBase64Url = toBase64Url(JSON.stringify(payload));
+  const signature = signAdminToken(payloadBase64Url);
+  return {
+    token: `${payloadBase64Url}.${signature}`,
+    expiresAt,
+  };
+}
+
+function verifyAdminToken(token: string) {
+  const [payloadPart, signaturePart] = String(token || "").split(".");
+  if (!payloadPart || !signaturePart) return false;
+
+  const expectedSig = signAdminToken(payloadPart);
+  const signatureBuf = Buffer.from(signaturePart);
+  const expectedBuf = Buffer.from(expectedSig);
+  if (
+    signatureBuf.length !== expectedBuf.length ||
+    !crypto.timingSafeEqual(signatureBuf, expectedBuf)
+  ) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(fromBase64Url(payloadPart)) as {
+      username?: string;
+      expiresAt?: number;
+    };
+    if (!payload?.username || payload.username !== ADMIN_USERNAME) return false;
+    if (!payload?.expiresAt || Date.now() > payload.expiresAt) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getAdminTokenFromRequest(req: express.Request) {
+  const authHeader = String(req.headers.authorization || "").trim();
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  return String(req.query.admin_token || "").trim();
+}
+
 // admin 路由级守卫：线上默认不开放后台查询能力。
 app.use("/api/admin", (req, res, next) => {
-  if (!ADMIN_LOCAL_ONLY) {
+  if (req.path === "/login") {
     next();
     return;
   }
-  if (isLocalAdminRequest(req)) {
-    next();
+
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+    res.status(503).json({ error: "Admin auth is not configured" });
     return;
   }
-  res.status(403).json({ error: "Admin API is restricted to localhost" });
+
+  const token = getAdminTokenFromRequest(req);
+  if (!token || !verifyAdminToken(token)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+});
+
+app.post("/api/admin/login", (req, res) => {
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+    res.status(503).json({ error: "Admin auth is not configured" });
+    return;
+  }
+
+  const body = req.body as AdminLoginBody;
+  const username = String(body?.username || "").trim();
+  const password = String(body?.password || "");
+  if (!username || !password) {
+    res.status(400).json({ error: "username and password are required" });
+    return;
+  }
+
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  const issue = createAdminToken(username);
+  res.json({
+    token: issue.token,
+    expiresAt: issue.expiresAt,
+    username,
+  });
 });
 
 // 生成主接口：

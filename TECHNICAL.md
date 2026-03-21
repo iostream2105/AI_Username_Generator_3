@@ -32,6 +32,9 @@
 后端环境变量：
 - `DOUBAO_API_KEY`（必填）
 - `FRONTEND_ORIGIN`（可选，逗号分隔，可配置 `*`）
+- `ADMIN_USERNAME`（后台管理员账号，后台鉴权必填）
+- `ADMIN_PASSWORD`（后台管理员密码，后台鉴权必填）
+- `ADMIN_TOKEN_EXPIRE_HOURS`（可选，后台 token 过期小时数，默认 `12`）
 - `DB_URL` 或 `MYSQL_URL`（可选，二选一）
 - 或者拆分配置：
   - `DB_HOST`
@@ -119,6 +122,19 @@
 
 反馈数据表：`user_feedback`
 
+### 后台鉴权与接口
+- 登录接口：`POST /api/admin/login`
+  - 入参：`{ "username": "...", "password": "..." }`
+  - 成功返回：`{ "token": "...", "expiresAt": 1740000000000, "username": "admin" }`
+- 受保护接口：
+  - `GET /api/admin/overview`
+  - `GET /api/admin/generations`
+  - `GET /api/admin/events`
+  - `GET /api/admin/favorites`
+  - `GET /api/admin/feedback`
+  - `GET /api/admin/export`
+- 鉴权方式：除 `/api/admin/login` 外，`/api/admin/*` 需携带 `Authorization: Bearer <token>`。
+
 ## 5. 埋点入库现状
 已接入实时写库：
 - `analytics_event_log`
@@ -160,16 +176,18 @@
 3. 分批修复中文乱码文本，并做回归验证。
 
 ## 10. 后台管理端增量实现（当前代码已落地）
-### 10.1 前端入口与开关
+### 10.1 前端入口
 - 后台前端页面：`src/AdminApp.tsx`
 - 后台 API 客户端：`src/admin/service.ts`
 - 后台类型定义：`src/admin/types.ts`
 - 入口开关：`src/main.tsx`
-  - 路径命中 `/admin` 时，且 `VITE_ENABLE_ADMIN` 开启，渲染后台页面
+  - 路径命中 `/admin` 时直接渲染后台页面
   - 其他情况渲染 App 页面
+  - 不再依赖 `VITE_ENABLE_ADMIN` 开关
 
 ### 10.2 后端接口与保护
 `server/index.ts` 已新增后台接口：
+- `POST /api/admin/login`
 - `GET /api/admin/overview`
 - `GET /api/admin/generations`
 - `GET /api/admin/events`
@@ -178,8 +196,9 @@
 - `GET /api/admin/export`
 
 接口保护：
-- `ADMIN_LOCAL_ONLY` 默认开启
-- 仅允许 localhost/127.0.0.1/::1 访问 `/api/admin/*`
+- 不再限制“仅本地访问”
+- 登录接口使用账号密码校验
+- 其余后台接口统一要求 Bearer Token
 
 ### 10.3 查询与导出策略
 - 默认时间窗口：近 7 天

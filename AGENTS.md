@@ -52,6 +52,7 @@
 - 生产环境前端需配置 `VITE_API_BASE_URL` 指向 CloudRun。
 - 跨域来源由 `FRONTEND_ORIGIN` 控制（后端）。
 - 开发环境后端已放行局域网私网来源用于手机调试；生产环境仍按 `FRONTEND_ORIGIN` 严格校验。
+- 后台管理端登录必填：`ADMIN_USERNAME`、`ADMIN_PASSWORD`（用于 `/api/admin/login` 账号密码鉴权）。
 
 ## 维护说明
 - 当前仓库仍存在部分历史中文乱码字符串（mojibake），后续修复时请逐步处理并做界面回归验证。

@@ -1,7 +1,7 @@
 # 后台管理端项目文档
 
 ## 1. 模块定位
-后台管理端是本项目的本地运营分析面板，定位为只读工具，不提供数据编辑与删除能力。
+后台管理端是本项目的运营分析面板，定位为只读工具，不提供数据编辑与删除能力。
 
 主要目标：
 - 便捷查看核心运营指标和趋势
@@ -12,18 +12,13 @@
 ### 2.1 前端入口
 - 入口路径：`/admin`
 - 页面实现：`src/AdminApp.tsx`
-- 入口开关：`src/main.tsx` 中 `VITE_ENABLE_ADMIN`
-
-规则：
-- `VITE_ENABLE_ADMIN=true`：允许访问后台页面
-- `VITE_ENABLE_ADMIN=false`：即使访问 `/admin` 也回退渲染 App 端
-- 开发环境默认可开启后台（配合 `VITE_ENABLE_ADMIN`）
+- 入口路由规则：`src/main.tsx` 路径命中 `/admin` 直接渲染后台页面（不再依赖 `VITE_ENABLE_ADMIN`）
 
 ### 2.2 后端访问保护
-后端所有后台接口统一挂载在 `/api/admin/*`，并受本地访问保护：
-- 开关变量：`ADMIN_LOCAL_ONLY`（默认 `true`）
-- 默认仅允许 `localhost / 127.0.0.1 / ::1`
-- 非本地访问返回 `403`
+后端所有后台接口统一挂载在 `/api/admin/*`，并采用账号密码登录鉴权：
+- 登录接口：`POST /api/admin/login`
+- 其余后台接口：必须携带 `Authorization: Bearer <token>`
+- 后台账号来源：`ADMIN_USERNAME` / `ADMIN_PASSWORD` 环境变量
 
 ## 3. 后台功能清单（当前实现）
 五个页面页签：
@@ -90,6 +85,16 @@
   - `text/csv; charset=utf-8`
   - 包含 UTF-8 BOM（兼容 Excel）
 
+### 4.7 登录接口
+- `POST /api/admin/login`
+- 请求体：
+  - `username`
+  - `password`
+- 返回：
+  - `token`
+  - `expiresAt`（毫秒时间戳）
+  - `username`
+
 ## 5. 数据来源映射
 - `analytics_event_log`：事件日志、总览部分指标
 - `analytics_generation_batch`：生成请求记录、耗时与成功率相关数据
@@ -109,12 +114,13 @@
 - 五个页签可正常查询
 - 筛选、分页、手动刷新生效
 - 导出文件可下载且内容与筛选一致
-- 非本地来源访问 `/api/admin/*` 返回 `403`
+- 未登录访问 `/api/admin/*`（非 `/api/admin/login`）返回 `401`
+- 使用登录 token 访问后台查询接口返回 `200`
 
 ## 7. 发布策略建议
-如果生产只发布 App 端，不暴露后台入口：
-1. 使用 `npm run build:prod` 构建（脚本中强制 `VITE_ENABLE_ADMIN=false`）
-2. 仅上传 `dist/` 到静态托管
-3. 不提供 `/admin/index.html` 静态入口
+当前默认策略为：生产环境可访问后台页面与后台接口，并通过账号密码登录鉴权进行访问控制。
 
-补充：即使前端不暴露后台入口，后端仍建议保留 `ADMIN_LOCAL_ONLY=true` 保护。
+推荐上线前检查：
+1. 已配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD`。
+2. `POST /api/admin/login` 可成功返回 token。
+3. 使用 token 可访问后台接口（overview / 列表 / 导出）。
