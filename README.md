@@ -119,13 +119,11 @@ npm run dev
 npm run lint
 npm run build
 npm run build:prod
-npm run build:local-admin
 npm run preview
 ```
 
 说明：
 - `npm run build:prod`：用于生产构建，并注入线上 `VITE_API_BASE_URL`。
-- `npm run build:local-admin`：保留为后台构建脚本别名（当前行为等同于 `vite build`）。
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
