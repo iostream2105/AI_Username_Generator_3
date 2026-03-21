@@ -5,6 +5,11 @@
       "source": "tencentcloudbase/cloudbase-skills",
       "sourceType": "github",
       "computedHash": "f75532791c6cdaaffb4e6b34c5325b82a6ce0ae25d0d37654bb9c7e970ff69f3"
+    },
+    "sql-queries": {
+      "source": "anthropics/knowledge-work-plugins",
+      "sourceType": "github",
+      "computedHash": "9e5eaf6a5466840a23a1826ba59819cc2341a9ee5b52be0a1eaa74cd7ff99290"
     }
   }
 }
