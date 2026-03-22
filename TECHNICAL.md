@@ -9,7 +9,7 @@
 - 当前后端形态：CloudRun（已移除备用云函数方案）
 
 主流程：
-1. 用户输入关键词（可选寓意和风格）
+1. 用户输入关键词（可选寓意和风格，并可选择生成模式 `cn/en/mix`）
 2. 前端调用 `POST /api/generate`，并携带 `userKey/sessionId/generationId`
 3. 后端调用豆包模型（`doubao-seed-1-8-251228`），使用 `json_schema` 约束结构化输出
 4. 若首次解析失败，后端使用更严格提示词做一次二次重试（不再使用本地兜底）
@@ -55,6 +55,7 @@
 ```json
 {
   "keywords": "月亮、海",
+  "nameMode": "cn",
   "meaning": "自由",
   "style": "文艺",
   "userKey": "u_xxx",
@@ -86,8 +87,12 @@
 生成接口实现要点：
 - 当前模型：`doubao-seed-1-8-251228`
 - 使用 `response_format: json_schema` + `strict: true`
+- 支持 `nameMode`：`cn`（中文网名）/ `en`（英文名字）/ `mix`（中英混合名字），默认 `cn`
+- Prompt 策略：优先级 `关键词 > 寓意 > 风格`
+- 复杂输入（如 3 关键词 + 寓意 + 风格）时自动降低风格权重（soft constraint）
 - 成功事件中 `properties.parse_retry` 标识是否触发过二次重试
 - `properties.fallback_used` 当前固定为 `false`（本地兜底逻辑已移除）
+- 关键生成埋点会携带 `properties.name_mode` 与 `properties.style_weight`
 
 ### `POST /api/track`
 用于写入 `analytics_event_log`，支持事件：

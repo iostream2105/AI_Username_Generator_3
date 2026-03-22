@@ -28,6 +28,9 @@
 - `session_id`：会话 ID（一次启动/一次页面会话）
 - `generation_id`：一次生成流程唯一 ID（前后端共享）
 - `properties`：事件扩展 JSON（如按钮位置、实验组、页面来源）
+  - `properties.name_mode`：生成模式（`cn` / `en` / `mix`）
+  - `properties.style_weight`：风格权重（`normal` / `reduced`）
+  - `properties.priority`：当前优先级策略（如 `keywords>meaning>style`）
 
 ## 指标与表字段映射
 

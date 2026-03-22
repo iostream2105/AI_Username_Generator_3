@@ -6,10 +6,85 @@ import { GeneratedName, GenerateParams } from './types';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
+type NameMode = 'cn' | 'en' | 'mix';
+
+const NAME_MODE_OPTIONS: Array<{ value: NameMode; label: string }> = [
+  { value: 'cn', label: '中文网名' },
+  { value: 'en', label: '英文名字' },
+  { value: 'mix', label: '中英混合' },
+];
 
 // 首页可选标签：参与生成请求，也用于筛选埋点
-const MEANING_TAGS = ['温柔', '自由', '幸运', '成长', '治愈', '坚定', '清醒', '浪漫'];
-const STYLE_TAGS = ['文艺', '清冷', '简约', '古风', '梦幻', '高级感'];
+const MEANING_TAGS = ['向上蜕变', '内心安定', '自由探索', '温暖联结'];
+const STYLE_TAGS_BY_MODE: Record<NameMode, string[]> = {
+  cn: ['诗意文艺', '现代简洁', '古风雅致', '梦幻灵动'],
+  en: ['现代简洁（国际感）', '柔和诗意（英文感）', '个性锋利（酷感）', '复古经典（旧电影感）'],
+  mix: ['中英平衡', '中文主导（英文点缀）', '英文主导（中文点缀）', '潮流辨识（社交ID感）'],
+};
+
+const MODE_HINTS: Record<NameMode, { keywordHint: string; title: string; subtitle: string }> = {
+  cn: {
+    keywordHint: '可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素',
+    title: '为你定制的网名',
+    subtitle: 'AI 定制示例',
+  },
+  en: {
+    keywordHint: '可输入英文词、缩写、生日月份等，建议用 1-3 个关键词',
+    title: '为你定制的英文名字',
+    subtitle: 'English 示例',
+  },
+  mix: {
+    keywordHint: '可输入中文词 + 英文词/缩写，帮助生成更有辨识度的混合名字',
+    title: '为你定制的中英混合名字',
+    subtitle: 'Mix 示例',
+  },
+};
+
+const MODE_EXAMPLES: Record<NameMode, Array<{ name: string; input: string; descTitle: string; desc: string }>> = {
+  cn: [
+    {
+      name: '仲阶闻',
+      input: 'zjw、8月',
+      descTitle: '仲月清韵感：',
+      desc: '取zjw的首字母谐音，“仲”对应8月作为仲夏之末的时序，阶前听风落桂的闲静意象，适配喜欢松弛氛围感的表达',
+    },
+    {
+      name: '知年桂',
+      input: 'ZN、桂花、温柔',
+      descTitle: '岁时桂香的温柔沉淀：',
+      desc: '“zn”谐音“知年”，桂花开落知年岁，每年如约而至的桂香藏着时光沉淀的柔和感，很适合喜欢沉静温柔气质的用户',
+    },
+  ],
+  en: [
+    {
+      name: 'Mossline',
+      input: 'M、October、calm',
+      descTitle: '自然感与克制感：',
+      desc: '以 moss 的自然意象做底色，搭配 line 的简洁边界感，整体更现代、易记且有英文社交场景的适配度。',
+    },
+    {
+      name: 'Aster Vale',
+      input: 'A、星、自由',
+      descTitle: '轻盈探索感：',
+      desc: 'Aster 带有星点与光感，Vale 增加空间纵深，名字读感顺滑，适合表达自由与温和的个人气质。',
+    },
+  ],
+  mix: [
+    {
+      name: '汐 Nova',
+      input: '海、Nova、成长',
+      descTitle: '流动与新生并置：',
+      desc: '中文“汐”保留东方意象，Nova 提供英文新星感，整体兼顾记忆点与社交平台辨识度。',
+    },
+    {
+      name: 'Luna见野',
+      input: 'Luna、见、自由',
+      descTitle: '中英节奏平衡：',
+      desc: 'Luna 提供柔和月光氛围，“见野”增强开放探索感，组合后更像一个有情绪线索的混合ID。',
+    },
+  ],
+};
+
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
@@ -103,6 +178,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 export default function App() {
   // 页面主状态机：home -> loading -> results / favorites
   const [view, setView] = useState<AppView>('home');
+  const [nameMode, setNameMode] = useState<NameMode>('cn');
   
   // 输入区状态：关键词 + 寓意标签 + 风格标签
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -125,6 +201,9 @@ export default function App() {
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isKeywordComposing, setIsKeywordComposing] = useState(false);
+  const styleOptions = STYLE_TAGS_BY_MODE[nameMode];
+  const modeHints = MODE_HINTS[nameMode];
+  const modeExamples = MODE_EXAMPLES[nameMode];
 
   // 统一视图切换：同步 React 视图与浏览器 history，保障系统返回键可按层级回退
   const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
@@ -170,16 +249,29 @@ export default function App() {
     error_code: string;
     properties: Record<string, unknown>;
   }> = {}) => {
+    const mergedProperties = {
+      name_mode: nameMode,
+      ...(payload.properties || {}),
+    };
+
     // 埋点失败只打印日志，不影响主流程交互
     void trackEvent({
       event_name: eventName,
       user_key: userKey,
       session_id: sessionId,
       ...payload,
+      properties: mergedProperties,
     }).catch((e) => {
       console.error(`Track ${eventName} failed`, e);
     });
   };
+
+  useEffect(() => {
+    if (!style) return;
+    if (!styleOptions.includes(style)) {
+      setStyle('');
+    }
+  }, [style, styleOptions]);
 
   useEffect(() => {
     // React StrictMode 在开发环境会触发双挂载，这里做一次运行时去重，避免曝光重复上报
@@ -278,6 +370,7 @@ export default function App() {
       // keywords 统一拼接后交给后端解析，保持请求结构简洁
       const params: GenerateParams = {
         keywords: finalKeywords.join('、'),
+        nameMode,
         userKey,
         sessionId,
         generationId,
@@ -286,6 +379,7 @@ export default function App() {
       if (style) params.style = style;
 
       const response = await generateNames(params);
+
       // 结果项附带 result_rank / generation_id，供收藏/复制埋点关联统计
       setCurrentGenerationId(response.generation_id || generationId);
       setResults(
@@ -560,6 +654,29 @@ export default function App() {
               </p>
 
               <div className="space-y-8">
+                {/* Name Mode */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-brand-900">
+                    生成模式 <span className="text-brand-800/50 font-normal">(必选)</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {NAME_MODE_OPTIONS.map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => setNameMode(mode.value)}
+                        className={`rounded-xl py-2 text-xs font-medium transition-colors ${
+                          nameMode === mode.value
+                            ? 'bg-[#5A5A40] text-white'
+                            : 'bg-white text-brand-800 border border-brand-900/10 hover:bg-brand-50'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Keywords */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-brand-900">
@@ -594,7 +711,7 @@ export default function App() {
                       />
                     )}
                   </div>
-                  <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素</p>
+                  <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">{modeHints.keywordHint}</p>
                 </div>
 
                 {/* Meaning & Style Dropdowns */}
@@ -624,7 +741,7 @@ export default function App() {
                         setStyle(val);
                         fireTrack('select_style', { page_name: 'home', style_tag: val || '' });
                       }} 
-                      options={STYLE_TAGS} 
+                      options={styleOptions} 
                       placeholder="不限风格" 
                     />
                   </div>
@@ -635,29 +752,22 @@ export default function App() {
               <div className="mt-10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-[1px] flex-1 bg-brand-900/10"></div>
-                  <span className="text-xs font-medium text-brand-800/40 uppercase tracking-widest">AI 定制示例</span>
+                  <span className="text-xs font-medium text-brand-800/40 uppercase tracking-widest">{modeHints.subtitle}</span>
                   <div className="h-[1px] flex-1 bg-brand-900/10"></div>
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
-                    <div className="flex justify-between items-end mb-2">
-                      <div className="font-serif text-lg text-brand-900">仲阶闻</div>
-                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">zjw、8月</div>
+                  {modeExamples.map((example) => (
+                    <div key={example.name} className="bg-white/40 rounded-2xl p-4 border border-white/60">
+                      <div className="flex justify-between items-end mb-2">
+                        <div className="font-serif text-lg text-brand-900">{example.name}</div>
+                        <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">{example.input}</div>
+                      </div>
+                      <p className="text-xs text-brand-800/70 leading-relaxed">
+                        <span className="font-medium text-brand-900">{example.descTitle}</span>{example.desc}
+                      </p>
                     </div>
-                    <p className="text-xs text-brand-800/70 leading-relaxed">
-                      <span className="font-medium text-brand-900">仲月清韵感：</span>取zjw的首字母谐音，“仲”对应8月作为仲夏之末的时序，阶前听风落桂的闲静意象，适配喜欢松弛氛围感的表达
-                    </p>
-                  </div>
-                  <div className="bg-white/40 rounded-2xl p-4 border border-white/60">
-                    <div className="flex justify-between items-end mb-2">
-                      <div className="font-serif text-lg text-brand-900">知年桂</div>
-                      <div className="text-[10px] text-brand-800/60 bg-white/60 px-2 py-1 rounded-md">ZN、桂花、温柔</div>
-                    </div>
-                    <p className="text-xs text-brand-800/70 leading-relaxed">
-                      <span className="font-medium text-brand-900">岁时桂香的温柔沉淀：</span>“zn”谐音“知年”，桂花开落知年岁，每年如约而至的桂香藏着时光沉淀的柔和感，很适合喜欢沉静温柔气质的用户
-                    </p>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -700,7 +810,7 @@ export default function App() {
               className="pt-4"
             >
               <div className="mb-6 flex items-center justify-between">
-                <h2 className="font-serif text-2xl text-brand-900">为你定制的网名</h2>
+                <h2 className="font-serif text-2xl text-brand-900">{modeHints.title}</h2>
                 <span className="text-sm text-brand-800/50">{results.length} 个结果</span>
               </div>
               

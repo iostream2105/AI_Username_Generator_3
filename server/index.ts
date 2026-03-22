@@ -92,6 +92,7 @@ const client = new OpenAI({
 
 interface GenerateBody {
   keywords: string;
+  nameMode?: "cn" | "en" | "mix";
   meaning?: string;
   style?: string;
   userKey?: string;
@@ -154,6 +155,8 @@ interface NameItem {
   meaning_desc: string;
   style_tags: string[];
 }
+
+type NameMode = "cn" | "en" | "mix";
 
 // 使用 JSON Schema 约束模型输出，降低非结构化返回概率
 const NAME_ITEMS_SCHEMA = {
@@ -303,6 +306,165 @@ async function requestModelContent(prompt: string, temperature = 0.8): Promise<s
   } as any);
 
   return completion.choices[0]?.message?.content || "";
+}
+
+function resolveNameMode(raw?: string): NameMode {
+  if (raw === "en" || raw === "mix") return raw;
+  return "cn";
+}
+
+function buildModeRequirements(nameMode: NameMode) {
+  if (nameMode === "en") {
+    return {
+      modeLabel: "英文名字",
+      namingRules: [
+        "名字以英文为主，建议 1-2 个单词。",
+        "优先使用自然、可读、易记的英文词形，避免拼音式英文。",
+        "避免生硬堆砌关键词，保证读感和真实昵称感。",
+      ],
+    };
+  }
+
+  if (nameMode === "mix") {
+    return {
+      modeLabel: "中英混合名字",
+      namingRules: [
+        "名字需包含中文和英文元素，整体读起来顺口自然。",
+        "可使用中英组合（如“汐 Nova”），但避免机械拼接和硬翻译。",
+        "优先保证可读性、辨识度和社交昵称感。",
+      ],
+    };
+  }
+
+  return {
+    modeLabel: "中文网名",
+    namingRules: [
+      "名字以中文为主，建议 2-4 个字。",
+      "避免低俗、土味、营销号感和过度生僻字。",
+      "优先保证自然、好读、好记。",
+    ],
+  };
+}
+
+function buildGenerationPrompt(params: {
+  keywords: string;
+  meaning: string;
+  style: string;
+  nameMode: NameMode;
+  keywordList: string[];
+  isComplexInput: boolean;
+}) {
+  const { keywords, meaning, style, nameMode, keywordList, isComplexInput } = params;
+  const mode = buildModeRequirements(nameMode);
+  const styleWeight = style
+    ? isComplexInput
+      ? "弱约束（输入较复杂，风格仅作参考）"
+      : "常规约束"
+    : "无风格约束";
+  const stylePriorityNote = style
+    ? isComplexInput
+      ? "当前输入元素较多，请自动降低风格权重：优先融合关键词和寓意，仅在不破坏自然度时体现风格。"
+      : "可适度体现风格，但不得破坏自然度。"
+    : "未选择风格，请自由发挥，但保持与关键词和寓意一致。";
+
+  return `你是一个资深命名专家，请根据用户输入生成高质量昵称。
+
+生成模式：${mode.modeLabel}
+用户输入：
+- 关键词（必填）：${keywords}
+- 关键词数量：${keywordList.length}
+- 期望寓意（选填）：${meaning || "未指定"}
+- 偏好风格（选填）：${style || "未指定"}
+
+优先级（必须遵守）：
+1. 关键词
+2. 寓意
+3. 风格
+
+风格策略：
+- 风格权重：${styleWeight}
+- ${stylePriorityNote}
+
+模式要求：
+${mode.namingRules.map((rule, idx) => `${idx + 1}. ${rule}`).join("\n")}
+
+输出要求：
+1. 生成 3 个候选名字。
+2. 每个候选包含：name / meaning_title / meaning_desc / style_tags。
+3. meaning_desc 必须显式写出“本次优先融合了什么”，例如“本次优先融合：关键词A + 寓意B”。
+4. style_tags 返回 1-2 个标签，使用中文描述（可与所选风格一致或相近）。
+5. 不要出现解释性前后文，只返回 JSON 对象。
+
+请严格返回 JSON 对象，格式如下：
+{
+  "items": [
+    {
+      "name": "名字",
+      "meaning_title": "寓意标题",
+      "meaning_desc": "一句话解释（需包含“本次优先融合：...”）",
+      "style_tags": ["风格标签1", "风格标签2"]
+    }
+  ]
+}`;
+}
+
+const CJK_CHAR_REGEX = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+const LATIN_CHAR_REGEX = /[A-Za-z]/;
+
+function hasCjkChar(text: string) {
+  return CJK_CHAR_REGEX.test(text);
+}
+
+function hasLatinChar(text: string) {
+  return LATIN_CHAR_REGEX.test(text);
+}
+
+function validateItemsByMode(items: NameItem[], mode: NameMode) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("INVALID_MODE_OUTPUT");
+  }
+
+  const names = items.map((item) => String(item.name || "").trim()).filter(Boolean);
+  if (names.length === 0) {
+    throw new Error("INVALID_MODE_OUTPUT");
+  }
+
+  const enLikeCount = names.filter((name) => hasLatinChar(name) && !hasCjkChar(name)).length;
+  const cnLikeCount = names.filter((name) => hasCjkChar(name) && !hasLatinChar(name)).length;
+  const mixLikeCount = names.filter((name) => hasCjkChar(name) && hasLatinChar(name)).length;
+
+  if (mode === "en") {
+    // 英文模式要求至少 2/3 为纯英文形态，避免误返回全中文。
+    if (enLikeCount < 2) {
+      throw new Error("INVALID_MODE_OUTPUT");
+    }
+    return;
+  }
+
+  if (mode === "mix") {
+    // 中英混合模式要求至少 2/3 同时包含中英文元素。
+    if (mixLikeCount < 2) {
+      throw new Error("INVALID_MODE_OUTPUT");
+    }
+    return;
+  }
+
+  // 中文模式要求至少 2/3 为纯中文形态。
+  if (cnLikeCount < 2) {
+    throw new Error("INVALID_MODE_OUTPUT");
+  }
+}
+
+function buildModeGuardPrompt(mode: NameMode) {
+  if (mode === "en") {
+    return "英文模式强约束：name 字段必须是英文（A-Z 字母，可含空格/连字符），不得包含任何中文字符。";
+  }
+
+  if (mode === "mix") {
+    return "中英混合模式强约束：name 字段必须同时包含中文字符与英文字符，不得只包含单一语言。";
+  }
+
+  return "中文模式强约束：name 字段必须为中文，不得包含英文字符。";
 }
 
 // --- admin 访问控制与查询参数解析辅助函数 ---
@@ -552,6 +714,7 @@ app.post("/api/admin/login", (req, res) => {
 app.post("/api/generate", async (req, res) => {
   const {
     keywords,
+    nameMode: rawNameMode,
     meaning,
     style,
     userKey = "",
@@ -566,32 +729,17 @@ app.post("/api/generate", async (req, res) => {
 
   const requestStartedAt = Date.now();
   const resolvedGenerationId = generationId || createEventId("gen");
+  const resolvedNameMode = resolveNameMode(rawNameMode);
   const keywordList = splitKeywords(keywords);
-
-  const prompt = `你是一个资深的起名专家和文学创作者，擅长根据用户的关键词、期望寓意和偏好风格，创作出有内涵、有美感、不俗气的网名。
-
-用户输入：
-- 关键词（必填）：${keywords}
-- 期望寓意（选填）：${meaning || "无特定期望"}
-- 偏好风格（选填）：${style || "无特定风格"}
-
-要求：
-1. 生成3个网名。
-2. 名字要简短（2-4个字为主）。
-3. 避免低俗、土味、营销号感。
-4. 名字要符合用户的关键词，并结合期望寓意和风格进行升华。
-
-请严格返回 JSON 对象，格式如下，不要包含任何其他文字：
-{
-  "items": [
-    {
-      "name": "网名",
-      "meaning_title": "寓意标题（如：自由与成长感）",
-      "meaning_desc": "一句话寓意解释（解释名字由哪些意象和情绪构成，以及适合什么表达）",
-      "style_tags": ["风格标签1", "风格标签2"]
-    }
-  ]
-}`;
+  const isComplexInput = keywordList.length >= 3 && Boolean((meaning || "").trim()) && Boolean((style || "").trim());
+  const prompt = buildGenerationPrompt({
+    keywords,
+    meaning: meaning || "",
+    style: style || "",
+    nameMode: resolvedNameMode,
+    keywordList,
+    isComplexInput,
+  });
 
   try {
     // 写入“发起生成”批次记录，作为后续成功/失败更新基准行。
@@ -624,6 +772,11 @@ app.post("/api/generate", async (req, res) => {
           meaningTag: meaning || "",
           styleTag: style || "",
           isSuccess: true,
+          properties: {
+            name_mode: resolvedNameMode,
+            style_weight: isComplexInput ? "reduced" : "normal",
+            priority: "keywords>meaning>style",
+          },
         }),
       "insert click_generate"
     );
@@ -643,12 +796,13 @@ app.post("/api/generate", async (req, res) => {
         }
         items = parseNameItems(text);
       }
+      validateItemsByMode(items, resolvedNameMode);
     } catch (e: any) {
-      if (e?.message !== "INVALID_MODEL_JSON") {
+      if (e?.message !== "INVALID_MODEL_JSON" && e?.message !== "INVALID_MODE_OUTPUT") {
         throw e;
       }
       parseRetry = true;
-      const strictPrompt = `${prompt}\n\n再次强调：必须只返回符合给定 JSON Schema 的合法 JSON 对象，不要 markdown，不要解释，不要额外文本。`;
+      const strictPrompt = `${prompt}\n\n再次强调：必须只返回符合给定 JSON Schema 的合法 JSON 对象，不要 markdown，不要解释，不要额外文本。\n${buildModeGuardPrompt(resolvedNameMode)}`;
 
       const retryText = await requestModelContent(strictPrompt, 0.5);
       try {
@@ -660,6 +814,7 @@ app.post("/api/generate", async (req, res) => {
         }
         items = parseNameItems(retryText);
       }
+      validateItemsByMode(items, resolvedNameMode);
     }
 
     const latencyMs = Date.now() - requestStartedAt;
@@ -710,6 +865,9 @@ app.post("/api/generate", async (req, res) => {
             result_count: items.length,
             parse_retry: parseRetry,
             fallback_used: false,
+            name_mode: resolvedNameMode,
+            style_weight: isComplexInput ? "reduced" : "normal",
+            priority: "keywords>meaning>style",
           },
         }),
       "insert generate_success"
@@ -720,7 +878,7 @@ app.post("/api/generate", async (req, res) => {
   } catch (e: any) {
     console.error("AI generation failed:", e.message);
     const latencyMs = Date.now() - requestStartedAt;
-    const errorCode = e?.code || "AI_GENERATION_FAILED";
+    const errorCode = e?.code || (e?.message === "INVALID_MODE_OUTPUT" ? "INVALID_MODE_OUTPUT" : "AI_GENERATION_FAILED");
 
     // 失败路径同样回写批次状态与失败事件，保证统计口径完整。
     await safeTrack(
@@ -750,6 +908,11 @@ app.post("/api/generate", async (req, res) => {
           isSuccess: false,
           latencyMs,
           errorCode,
+          properties: {
+            name_mode: resolvedNameMode,
+            style_weight: isComplexInput ? "reduced" : "normal",
+            priority: "keywords>meaning>style",
+          },
         }),
       "insert generate_success failure"
     );
