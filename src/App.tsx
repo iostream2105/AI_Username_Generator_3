@@ -16,11 +16,6 @@ const NAME_MODE_OPTIONS: Array<{ value: NameMode; label: string }> = [
 
 // 首页可选标签：参与生成请求，也用于筛选埋点
 const MEANING_TAGS = ['向上蜕变', '内心安定', '自由探索', '温暖联结'];
-const STYLE_TAGS_BY_MODE: Record<NameMode, string[]> = {
-  cn: ['诗意文艺', '现代简洁', '古风雅致', '梦幻灵动'],
-  en: ['现代简洁（国际感）', '柔和诗意（英文感）', '个性锋利（酷感）', '复古经典（旧电影感）'],
-  mix: ['中英平衡', '中文主导（英文点缀）', '英文主导（中文点缀）', '潮流辨识（社交ID感）'],
-};
 
 const MODE_HINTS: Record<NameMode, { keywordHint: string; title: string; subtitle: string }> = {
   cn: {
@@ -29,7 +24,7 @@ const MODE_HINTS: Record<NameMode, { keywordHint: string; title: string; subtitl
     subtitle: 'AI 定制示例',
   },
   en: {
-    keywordHint: '可输入英文词、缩写、生日月份等，建议用 1-3 个关键词',
+    keywordHint: '可输入英文词、缩写、生日月份等，建议用 1-2 个关键词',
     title: '为你定制的英文名字',
     subtitle: 'English 示例',
   },
@@ -180,11 +175,10 @@ export default function App() {
   const [view, setView] = useState<AppView>('home');
   const [nameMode, setNameMode] = useState<NameMode>('cn');
   
-  // 输入区状态：关键词 + 寓意标签 + 风格标签
+  // 输入区状态：关键词 + 寓意标签
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
   const [meaning, setMeaning] = useState('');
-  const [style, setStyle] = useState('');
   
   // 结果区状态：生成结果、收藏、复制提示、反馈态
   const [results, setResults] = useState<GeneratedName[]>([]);
@@ -201,7 +195,6 @@ export default function App() {
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isKeywordComposing, setIsKeywordComposing] = useState(false);
-  const styleOptions = STYLE_TAGS_BY_MODE[nameMode];
   const modeHints = MODE_HINTS[nameMode];
   const modeExamples = MODE_EXAMPLES[nameMode];
 
@@ -241,7 +234,6 @@ export default function App() {
     generation_id: string;
     keywords_count: number;
     meaning_tag: string;
-    style_tag: string;
     result_rank: number;
     result_name: string;
     is_success: boolean;
@@ -265,13 +257,6 @@ export default function App() {
       console.error(`Track ${eventName} failed`, e);
     });
   };
-
-  useEffect(() => {
-    if (!style) return;
-    if (!styleOptions.includes(style)) {
-      setStyle('');
-    }
-  }, [style, styleOptions]);
 
   useEffect(() => {
     // React StrictMode 在开发环境会触发双挂载，这里做一次运行时去重，避免曝光重复上报
@@ -350,7 +335,7 @@ export default function App() {
   const handleGenerate = async () => {
     // 若输入框尚有未确认文本，点击生成时会自动并入关键词
     let finalKeywords = [...keywords];
-    if (keywordInput.trim() && finalKeywords.length < 3) {
+    if (keywordInput.trim() && finalKeywords.length < 2) {
       finalKeywords.push(keywordInput.trim());
       setKeywords(finalKeywords);
       setKeywordInput('');
@@ -376,7 +361,6 @@ export default function App() {
         generationId,
       };
       if (meaning) params.meaning = meaning;
-      if (style) params.style = style;
 
       const response = await generateNames(params);
 
@@ -507,11 +491,11 @@ export default function App() {
       return;
     }
 
-    // 最多 3 个且去重；仅新增词触发 input_keywords 埋点
+    // 最多 2 个且去重；仅新增词触发 input_keywords 埋点
     const next = [...keywords];
     const accepted: string[] = [];
     for (const part of parts) {
-      if (next.length >= 3) break;
+      if (next.length >= 2) break;
       if (next.includes(part)) continue;
       next.push(part);
       accepted.push(part);
@@ -680,7 +664,7 @@ export default function App() {
                 {/* Keywords */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-brand-900">
-                    关键词 <span className="text-brand-800/50 font-normal">(必填，1-3个)</span>
+                    关键词 <span className="text-brand-800/50 font-normal">(必填，1-2个)</span>
                   </label>
                   <div className="w-full bg-white border-none rounded-2xl px-4 py-3 min-h-[56px] flex flex-wrap items-center gap-2 shadow-[0px_2px_10px_rgba(0,0,0,0.02)] transition-all focus-within:ring-2 focus-within:ring-brand-800/20">
                     {keywords.map((kw, idx) => (
@@ -694,7 +678,7 @@ export default function App() {
                         </button>
                       </span>
                     ))}
-                    {keywords.length < 3 && (
+                    {keywords.length < 2 && (
                       <input
                         type="text"
                         value={keywordInput}
@@ -714,8 +698,8 @@ export default function App() {
                   <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">{modeHints.keywordHint}</p>
                 </div>
 
-                {/* Meaning & Style Dropdowns */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Meaning Dropdown */}
+                <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-3">
                     <label className="block text-sm font-medium text-brand-900">
                       期望寓意 <span className="text-brand-800/50 font-normal">(选填)</span>
@@ -728,21 +712,6 @@ export default function App() {
                       }} 
                       options={MEANING_TAGS} 
                       placeholder="不限寓意" 
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-brand-900">
-                      偏好风格 <span className="text-brand-800/50 font-normal">(选填)</span>
-                    </label>
-                    <CustomSelect 
-                      value={style} 
-                      onChange={(val) => {
-                        setStyle(val);
-                        fireTrack('select_style', { page_name: 'home', style_tag: val || '' });
-                      }} 
-                      options={styleOptions} 
-                      placeholder="不限风格" 
                     />
                   </div>
                 </div>
@@ -890,7 +859,6 @@ export default function App() {
                       generation_id: currentGenerationId,
                       keywords_count: keywords.length + (keywordInput.trim() ? 1 : 0),
                       meaning_tag: meaning || '',
-                      style_tag: style || '',
                     });
                     void handleGenerate();
                   }}

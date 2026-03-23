@@ -12,7 +12,6 @@ export interface GenerateParams {
   keywords: string;
   nameMode?: "cn" | "en" | "mix";
   meaning?: string;
-  style?: string;
   userKey?: string;
   sessionId?: string;
   generationId?: string;

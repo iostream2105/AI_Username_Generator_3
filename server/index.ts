@@ -94,7 +94,6 @@ interface GenerateBody {
   keywords: string;
   nameMode?: "cn" | "en" | "mix";
   meaning?: string;
-  style?: string;
   userKey?: string;
   sessionId?: string;
   generationId?: string;
@@ -349,41 +348,27 @@ function buildModeRequirements(nameMode: NameMode) {
 function buildGenerationPrompt(params: {
   keywords: string;
   meaning: string;
-  style: string;
   nameMode: NameMode;
   keywordList: string[];
-  isComplexInput: boolean;
 }) {
-  const { keywords, meaning, style, nameMode, keywordList, isComplexInput } = params;
+  const { keywords, meaning, nameMode, keywordList } = params;
   const mode = buildModeRequirements(nameMode);
-  const styleWeight = style
-    ? isComplexInput
-      ? "弱约束（输入较复杂，风格仅作参考）"
-      : "常规约束"
-    : "无风格约束";
-  const stylePriorityNote = style
-    ? isComplexInput
-      ? "当前输入元素较多，请自动降低风格权重：优先融合关键词和寓意，仅在不破坏自然度时体现风格。"
-      : "可适度体现风格，但不得破坏自然度。"
-    : "未选择风格，请自由发挥，但保持与关键词和寓意一致。";
 
   return `你是一个资深命名专家，请根据用户输入生成高质量昵称。
+
+核心目标：
+- 生成的昵称要有立体深意、高级感、独特性，避免模板化和撞名感。
 
 生成模式：${mode.modeLabel}
 用户输入：
 - 关键词（必填）：${keywords}
 - 关键词数量：${keywordList.length}
 - 期望寓意（选填）：${meaning || "未指定"}
-- 偏好风格（选填）：${style || "未指定"}
 
-优先级（必须遵守）：
-1. 关键词
-2. 寓意
-3. 风格
-
-风格策略：
-- 风格权重：${styleWeight}
-- ${stylePriorityNote}
+融合要求（必须遵守）：
+1. 本次输入元素最多 3 个（关键词 1-2 个 + 可选寓意 1 个），请整体理解并自然融合，不要机械拼接。
+2. 名字要自然、可读、可记忆，不低俗、不土味、不营销号感。
+3. 兼顾辨识度、审美与社交昵称感，避免与常见模板高度相似。
 
 模式要求：
 ${mode.namingRules.map((rule, idx) => `${idx + 1}. ${rule}`).join("\n")}
@@ -391,8 +376,8 @@ ${mode.namingRules.map((rule, idx) => `${idx + 1}. ${rule}`).join("\n")}
 输出要求：
 1. 生成 3 个候选名字。
 2. 每个候选包含：name / meaning_title / meaning_desc / style_tags。
-3. meaning_desc 必须显式写出“本次优先融合了什么”，例如“本次优先融合：关键词A + 寓意B”。
-4. style_tags 返回 1-2 个标签，使用中文描述（可与所选风格一致或相近）。
+3. meaning_desc 用一句话解释名字的意象与气质，不要出现“本次优先融合”或类似措辞。
+4. style_tags 返回 1-2 个标签，使用中文描述。
 5. 不要出现解释性前后文，只返回 JSON 对象。
 
 请严格返回 JSON 对象，格式如下：
@@ -401,7 +386,7 @@ ${mode.namingRules.map((rule, idx) => `${idx + 1}. ${rule}`).join("\n")}
     {
       "name": "名字",
       "meaning_title": "寓意标题",
-      "meaning_desc": "一句话解释（需包含“本次优先融合：...”）",
+      "meaning_desc": "一句话解释",
       "style_tags": ["风格标签1", "风格标签2"]
     }
   ]
@@ -716,7 +701,6 @@ app.post("/api/generate", async (req, res) => {
     keywords,
     nameMode: rawNameMode,
     meaning,
-    style,
     userKey = "",
     sessionId = "",
     generationId,
@@ -727,18 +711,24 @@ app.post("/api/generate", async (req, res) => {
     return;
   }
 
+  const keywordList = splitKeywords(keywords);
+  if (keywordList.length === 0) {
+    res.status(400).json({ error: "keywords must contain at least 1 item" });
+    return;
+  }
+  if (keywordList.length > 2) {
+    res.status(400).json({ error: "keywords must contain 1-2 items" });
+    return;
+  }
+
   const requestStartedAt = Date.now();
   const resolvedGenerationId = generationId || createEventId("gen");
   const resolvedNameMode = resolveNameMode(rawNameMode);
-  const keywordList = splitKeywords(keywords);
-  const isComplexInput = keywordList.length >= 3 && Boolean((meaning || "").trim()) && Boolean((style || "").trim());
   const prompt = buildGenerationPrompt({
     keywords,
     meaning: meaning || "",
-    style: style || "",
     nameMode: resolvedNameMode,
     keywordList,
-    isComplexInput,
   });
 
   try {
@@ -753,7 +743,7 @@ app.post("/api/generate", async (req, res) => {
           keywordsJson: keywordList,
           keywordsCount: keywordList.length,
           meaningTag: meaning || "",
-          styleTag: style || "",
+          styleTag: "",
           modelName: MODEL_NAME,
         }),
       "upsertGenerationBatchStart"
@@ -770,12 +760,10 @@ app.post("/api/generate", async (req, res) => {
           generationId: resolvedGenerationId,
           keywordsCount: keywordList.length,
           meaningTag: meaning || "",
-          styleTag: style || "",
+          styleTag: "",
           isSuccess: true,
           properties: {
             name_mode: resolvedNameMode,
-            style_weight: isComplexInput ? "reduced" : "normal",
-            priority: "keywords>meaning>style",
           },
         }),
       "insert click_generate"
@@ -858,7 +846,7 @@ app.post("/api/generate", async (req, res) => {
           generationId: resolvedGenerationId,
           keywordsCount: keywordList.length,
           meaningTag: meaning || "",
-          styleTag: style || "",
+          styleTag: "",
           isSuccess: true,
           latencyMs,
           properties: {
@@ -866,8 +854,6 @@ app.post("/api/generate", async (req, res) => {
             parse_retry: parseRetry,
             fallback_used: false,
             name_mode: resolvedNameMode,
-            style_weight: isComplexInput ? "reduced" : "normal",
-            priority: "keywords>meaning>style",
           },
         }),
       "insert generate_success"
@@ -904,14 +890,12 @@ app.post("/api/generate", async (req, res) => {
           generationId: resolvedGenerationId,
           keywordsCount: keywordList.length,
           meaningTag: meaning || "",
-          styleTag: style || "",
+          styleTag: "",
           isSuccess: false,
           latencyMs,
           errorCode,
           properties: {
             name_mode: resolvedNameMode,
-            style_weight: isComplexInput ? "reduced" : "normal",
-            priority: "keywords>meaning>style",
           },
         }),
       "insert generate_success failure"
