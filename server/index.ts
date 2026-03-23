@@ -315,7 +315,7 @@ function resolveNameMode(raw?: string): NameMode {
 function buildModeRequirements(nameMode: NameMode) {
   if (nameMode === "en") {
     return {
-      modeLabel: "英文名字",
+      modeLabel: "英文网名",
       namingRules: [
         "名字以英文为主，建议 1-2 个单词。",
         "优先使用自然、可读、易记的英文词形，避免拼音式英文。",
@@ -326,7 +326,7 @@ function buildModeRequirements(nameMode: NameMode) {
 
   if (nameMode === "mix") {
     return {
-      modeLabel: "中英混合名字",
+      modeLabel: "中英混合网名",
       namingRules: [
         "名字需包含中文和英文元素，整体读起来顺口自然。",
         "可使用中英组合（如“汐 Nova”），但避免机械拼接和硬翻译。",

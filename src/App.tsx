@@ -10,28 +10,28 @@ type NameMode = 'cn' | 'en' | 'mix';
 
 const NAME_MODE_OPTIONS: Array<{ value: NameMode; label: string }> = [
   { value: 'cn', label: '中文网名' },
-  { value: 'en', label: '英文名字' },
-  { value: 'mix', label: '中英混合' },
+  { value: 'en', label: '英文网名' },
+  { value: 'mix', label: '中英混合网名' },
 ];
 
 // 首页可选标签：参与生成请求，也用于筛选埋点
-const MEANING_TAGS = ['向上蜕变', '内心安定', '自由探索', '温暖联结'];
+const MEANING_TAGS = ['自由探索', '治愈安定', '成长进阶', '浪漫心动', '幸运开运'];
 
 const MODE_HINTS: Record<NameMode, { keywordHint: string; title: string; subtitle: string }> = {
   cn: {
-    keywordHint: '可输入姓名缩写、生日月份、喜欢的事物等等你想要融入的元素',
+    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
     title: '为你定制的网名',
     subtitle: 'AI 定制示例',
   },
   en: {
-    keywordHint: '可输入英文词、缩写、生日月份等，建议用 1-2 个关键词',
-    title: '为你定制的英文名字',
-    subtitle: 'English 示例',
+    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
+    title: '为你定制的英文网名',
+    subtitle: 'AI 定制示例',
   },
   mix: {
-    keywordHint: '可输入中文词 + 英文词/缩写，帮助生成更有辨识度的混合名字',
-    title: '为你定制的中英混合名字',
-    subtitle: 'Mix 示例',
+    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
+    title: '为你定制的中英混合网名',
+    subtitle: 'AI 定制示例',
   },
 };
 
@@ -638,29 +638,6 @@ export default function App() {
               </p>
 
               <div className="space-y-8">
-                {/* Name Mode */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-brand-900">
-                    生成模式 <span className="text-brand-800/50 font-normal">(必选)</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {NAME_MODE_OPTIONS.map((mode) => (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        onClick={() => setNameMode(mode.value)}
-                        className={`rounded-xl py-2 text-xs font-medium transition-colors ${
-                          nameMode === mode.value
-                            ? 'bg-[#5A5A40] text-white'
-                            : 'bg-white text-brand-800 border border-brand-900/10 hover:bg-brand-50'
-                        }`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Keywords */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-brand-900">
@@ -696,6 +673,29 @@ export default function App() {
                     )}
                   </div>
                   <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">{modeHints.keywordHint}</p>
+                </div>
+
+                {/* Name Mode */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-brand-900">
+                    生成模式 <span className="text-brand-800/50 font-normal">(必选)</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {NAME_MODE_OPTIONS.map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => setNameMode(mode.value)}
+                        className={`rounded-xl py-2 text-xs font-medium transition-colors ${
+                          nameMode === mode.value
+                            ? 'bg-[#5A5A40] text-white'
+                            : 'bg-white text-brand-800 border border-brand-900/10 hover:bg-brand-50'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Meaning Dropdown */}
