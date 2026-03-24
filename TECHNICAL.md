@@ -9,7 +9,7 @@
 - 当前后端形态：CloudRun（已移除备用云函数方案）
 
 主流程：
-1. 用户输入关键词（可选寓意和风格，并可选择生成模式 `cn/en/mix`）
+1. 用户输入关键词（可选期望寓意，并可选择生成模式 `cn/en/mix`）
 2. 前端调用 `POST /api/generate`，并携带 `userKey/sessionId/generationId`
 3. 后端调用豆包模型（`doubao-seed-1-8-251228`），使用 `json_schema` 约束结构化输出
 4. 若首次解析失败，后端使用更严格提示词做一次二次重试（不再使用本地兜底）
@@ -47,7 +47,11 @@
 - 开发环境：额外自动放行局域网私网来源（`192.168.x.x` / `10.x.x.x` / `172.16-31.x.x`）用于手机联调。
 
 前端构建变量：
-- `VITE_API_BASE_URL`（生产环境建议指向 CloudRun 域名）
+- `VITE_API_BASE_URL`（可选；为空时默认同域调用 `/api/*`）
+
+补充：
+- 当前 `npm run build:prod` 与 `npm run build` 等价，不再默认注入 CloudRun 域名。
+- 当前线上主站通过同域路由访问后端（`https://mingyouyi.cn/api/*`）。
 
 ## 4. API 约定
 ### `POST /api/generate`
@@ -57,7 +61,6 @@
   "keywords": "月亮、海",
   "nameMode": "cn",
   "meaning": "自由",
-  "style": "文艺",
   "userKey": "u_xxx",
   "sessionId": "s_xxx",
   "generationId": "gen_xxx"
@@ -80,26 +83,29 @@
 ```
 
 状态码：
-- `400`：缺少关键词
-- `503`：数据库未配置
+- `400`：缺少关键词，或关键词拆分后数量不在 `1-2` 范围
 - `500`：模型调用失败，或首次+二次重试后仍解析失败
 
 生成接口实现要点：
 - 当前模型：`doubao-seed-1-8-251228`
 - 使用 `response_format: json_schema` + `strict: true`
 - 支持 `nameMode`：`cn`（中文网名）/ `en`（英文名字）/ `mix`（中英混合名字），默认 `cn`
-- Prompt 策略：优先级 `关键词 > 寓意 > 风格`
-- 复杂输入（如 3 关键词 + 寓意 + 风格）时自动降低风格权重（soft constraint）
+- 关键词字符串会按 `,` / `，` / 空格 / 换行拆分，拆分后仅允许 `1-2` 个
+- Prompt 以“整体融合输入元素”为主，不做显式优先级排序
+- Prompt 增强了“立体深意、高级感、独特性”目标约束
+- 对缩写关键词（如 `zk`/`wsz`）增加语义化融合引导，降低“中文 + 字母硬拼”概率
+- `mix` 模式下对 3 位缩写会引导生成中出现部分“三字中文 + 英文片段”结果（非强制全量）
+- 结果解释文案避免“本次优先融合...”表述
 - 成功事件中 `properties.parse_retry` 标识是否触发过二次重试
 - `properties.fallback_used` 当前固定为 `false`（本地兜底逻辑已移除）
-- 关键生成埋点会携带 `properties.name_mode` 与 `properties.style_weight`
+- 关键生成埋点会携带 `properties.name_mode`
 
 ### `POST /api/track`
 用于写入 `analytics_event_log`，支持事件：
 - `home_exposure`
 - `input_keywords`
 - `select_meaning`
-- `select_style`
+- `select_style`（历史事件，当前前端已下线）
 - `click_generate`
 - `generate_success`
 - `click_copy`
@@ -151,9 +157,13 @@
 
 ## 6. 部署拓扑
 ### 生产环境
-- 前端：CloudBase 静态托管域名
-- 后端：CloudRun 公网域名（服务名：`ai-username-api-v2`）
+- 主站域名：`https://mingyouyi.cn/`
+  - `/` -> CloudBase 静态托管
+  - `/api/*` -> CloudRun 服务 `ai-username-api-v2`（HTTP 访问服务路由，路径透传开启）
+- 前端默认域名：`https://ai-username-env-2glikc1y1cb803fb-1330697233.tcloudbaseapp.com/`
+- 后端默认域名：`https://ai-username-api-v2-234853-9-1330697233.sh.run.tcloudbase.com`
 - 数据库：CloudBase MySQL（环境内）
+  - 当前生产库名：`mingyouyi`
 
 ### 本地环境
 - 前端：`http://localhost:3000`

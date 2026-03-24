@@ -1,11 +1,15 @@
 # AI 网名生成器
 
-这是一个前后端分离的 AI 命名生成项目。用户输入关键词，并可选寓意与风格偏好，可按模式生成中文网名、英文名字或中英混合名字（每次返回 3 个候选及解释）。
+这是一个前后端分离的 AI 命名生成项目。用户输入关键词，并可选期望寓意，可按模式生成中文网名、英文名字或中英混合名字（每次返回 3 个候选及解释）。
 
 ## 当前线上部署
-- 前端（CloudBase 静态托管）：
+- 主域名（前后端同域）：
+  https://mingyouyi.cn/
+  - 前端静态资源：`/`
+  - 后端 API：`/api/*`（HTTP 访问服务路由到 CloudRun）
+- 前端默认域名（CloudBase 静态托管）：
   https://ai-username-env-2glikc1y1cb803fb-1330697233.tcloudbaseapp.com/
-- 后端（CloudRun）：
+- 后端默认域名（CloudRun）：
   https://ai-username-api-v2-234853-9-1330697233.sh.run.tcloudbase.com
 
 ## 项目结构
@@ -46,8 +50,10 @@ DB_HOST=你的MySQL地址
 DB_PORT=3306
 DB_USER=你的用户名
 DB_PASSWORD=你的密码
-DB_NAME=ai-username-env-2glikc1y1cb803fb
+DB_NAME=你的数据库名（例如 mingyouyi）
 ```
+
+补充：当前生产环境后端数据库库名为 `mingyouyi`，敏感连接信息仅保存在 CloudRun 环境变量中，不写入仓库。
 
 3. 启动后端
 ```bash
@@ -87,8 +93,11 @@ npm run dev
 - 已移除本地兜底结果；若重试后仍解析失败，接口返回 `500`，前端提示“生成失败，请稍后重试”。
 - 前端加载态采用分阶段文案：`正在理解关键词 -> 正在创作 -> 正在润色`。
 - 支持三种模式：`cn`（中文网名）/ `en`（英文名字）/ `mix`（中英混合名字）。
-- 后端采用软约束策略：当输入复杂（如 3 关键词 + 寓意 + 风格）时，自动降低风格权重，优先遵循 `关键词 > 寓意 > 风格`。
-- 结果解释会尽量体现“本次优先融合了什么”，用于降低用户预期落差。
+- 关键词入参会按分隔符拆分并校验：每次仅允许 `1-2` 个关键词。
+- 前端已移除“偏好风格”选项，当前仅保留“期望寓意”（选填）。
+- Prompt 已增强“立体深意/高级感/独特性”引导，并对缩写（如 `zk`/`wsz`）做语义化融合，降低“中文+字母硬拼”现象。
+- 在 `mix` 模式且关键词为 3 位缩写时，会引导模型在 3 个结果里自然包含 `1-2` 个“三字中文 + 英文片段”结构。
+- 结果解释不再出现“本次优先融合...”措辞。
 
 ## 关键接口示例
 `POST /api/generate` 请求体：
@@ -97,12 +106,15 @@ npm run dev
   "keywords": "月亮、海",
   "nameMode": "cn",
   "meaning": "自由",
-  "style": "文艺",
   "userKey": "u_xxx",
   "sessionId": "s_xxx",
   "generationId": "gen_xxx"
 }
 ```
+
+说明：
+- `keywords` 为字符串，后端会按 `,` / `，` / 空格 / 换行等分隔符拆分。
+- 拆分后关键词数量必须在 `1-2` 之间。
 
 `POST /api/generate` 响应体：
 ```json
@@ -128,7 +140,8 @@ npm run preview
 ```
 
 说明：
-- `npm run build:prod`：用于生产构建，并注入线上 `VITE_API_BASE_URL`。
+- `npm run build:prod`：当前与 `npm run build` 等价，默认走同域 `/api`，不再强制注入 `VITE_API_BASE_URL`。
+- 仅在“前端需要跨域直连后端”时，才建议显式设置 `VITE_API_BASE_URL`。
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
@@ -138,7 +151,12 @@ npm run preview
 ## CloudBase 说明
 - 环境 ID：`ai-username-env-2glikc1y1cb803fb`
 - 主服务：`ai-username-api-v2`
-- 生产构建前，请将 `VITE_API_BASE_URL` 设置为 CloudRun 域名
+- 自定义域名：`mingyouyi.cn`、`www.mingyouyi.cn`
+- HTTP 访问服务路由：
+  - `/` -> 静态托管（前端）
+  - `/api` -> `ai-username-api-v2`（CloudRun，已开启路径透传）
+- 当前生产前端默认同域访问 `/api`，通常无需设置 `VITE_API_BASE_URL`
+- 当前生产数据库库名：`mingyouyi`（其余敏感连接信息只在云端环境变量中维护）
 - 后台接口始终支持本地与线上访问，不再区分 `ADMIN_LOCAL_ONLY` / `ADMIN_REQUIRE_AUTH` / `VITE_ENABLE_ADMIN`（这些开关已下线）。
 - 后台登录仅依赖：
   - `ADMIN_USERNAME=你的后台账号`
