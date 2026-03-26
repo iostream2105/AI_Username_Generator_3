@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X, MessageSquare, Share2, Download } from 'lucide-react';
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
@@ -203,6 +203,87 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
           </>
         )}
       </AnimatePresence>
+    </div>
+  );
+};
+
+const AutoFitName = ({
+  text,
+  maxFontSize = 52,
+  minFontSize = 18,
+}: {
+  text: string;
+  maxFontSize?: number;
+  minFontSize?: number;
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const textRef = useRef<HTMLHeadingElement | null>(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const textElement = textRef.current;
+    if (!container || !textElement || typeof window === 'undefined') return;
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const measure = () => {
+      const availableWidth = container.clientWidth;
+      if (!availableWidth) return;
+
+      const computedStyle = window.getComputedStyle(textElement);
+      const fontFamily = computedStyle.fontFamily || 'serif';
+      const fontWeight = computedStyle.fontWeight || '500';
+      const letterSpacing = Number.parseFloat(computedStyle.letterSpacing || '0') || 0;
+      const charCount = Array.from(text || '').length;
+
+      const getTextWidth = (size: number) => {
+        context.font = `${fontWeight} ${size}px ${fontFamily}`;
+        return context.measureText(text).width + letterSpacing * Math.max(charCount - 1, 0);
+      };
+
+      let low = minFontSize;
+      let high = maxFontSize;
+      let best = minFontSize;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        if (getTextWidth(mid) <= availableWidth) {
+          best = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      setFontSize(best);
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => measure());
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+
+    const handleResize = () => measure();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [text, maxFontSize, minFontSize]);
+
+  return (
+    <div ref={containerRef} className="min-w-0">
+      <h3
+        ref={textRef}
+        title={text}
+        className="overflow-hidden whitespace-nowrap font-serif font-medium tracking-tight text-brand-900"
+        style={{ fontSize: `${fontSize}px`, lineHeight: 1.04 }}
+      >
+        {text}
+      </h3>
     </div>
   );
 };
@@ -709,9 +790,11 @@ export default function App() {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-[32px] p-6 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] mb-4"
     >
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="font-serif text-3xl font-medium tracking-tight text-brand-900">{item.name}</h3>
-        <div className="flex gap-2">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <AutoFitName text={item.name} />
+        </div>
+        <div className="flex shrink-0 gap-1.5">
           <button
             onClick={() => openShareModal(item)}
             className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
