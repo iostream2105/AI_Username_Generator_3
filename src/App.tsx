@@ -19,19 +19,19 @@ const MEANING_TAGS = ['自由探索', '治愈安定', '成长进阶', '浪漫心
 
 const MODE_HINTS: Record<NameMode, { keywordHint: string; title: string; subtitle: string }> = {
   cn: {
-    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
+    keywordHint: '建议输入姓名缩写、生日月份或愿望词，生成会更像你',
     title: '为你定制的网名',
-    subtitle: 'AI 定制示例',
+    subtitle: '结果示例',
   },
   en: {
-    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
+    keywordHint: '建议输入姓名缩写、生日月份或愿望词，生成会更像你',
     title: '为你定制的英文网名',
-    subtitle: 'AI 定制示例',
+    subtitle: '结果示例',
   },
   mix: {
-    keywordHint: 'tips：建议输入姓名首字母缩写和生日月份哦，AI可以生成更加符合你的网名',
+    keywordHint: '建议输入姓名缩写、生日月份或愿望词，生成会更像你',
     title: '为你定制的中英混合网名',
-    subtitle: 'AI 定制示例',
+    subtitle: '结果示例',
   },
 };
 
@@ -79,6 +79,41 @@ const MODE_EXAMPLES: Record<NameMode, Array<{ name: string; input: string; descT
     },
   ],
 };
+
+const HOME_SCENES = ['微信昵称', '小红书昵称', '游戏 ID', '英文社媒名'];
+const HOME_HIGHLIGHTS = ['输入 1-2 个关键词即可生成', '每次返回 3 个有寓意的结果', '支持中文 / 英文 / 中英混合'];
+const VALUE_PROPS = [
+  {
+    title: '不是随机拼词',
+    desc: '结合你的缩写、生日、情绪和期待寓意，让名字更像你，而不是模板化随机结果。',
+  },
+  {
+    title: '每个名字都有解释',
+    desc: '不只给你一个词，还会告诉你这个名字背后的意象、气质和适合表达的状态。',
+  },
+  {
+    title: '适合直接拿去用',
+    desc: '适配微信、小红书、游戏和英文社媒等常见场景，生成后可以立即复制、收藏、换一批。',
+  },
+];
+const FAQ_ITEMS = [
+  {
+    question: '输入什么样的关键词更容易出好结果？',
+    answer: '建议优先输入姓名缩写、生日月份、愿望词、情绪词或你想表达的气质，比如“zk、7月”“自由、海”“治愈、桂花”。',
+  },
+  {
+    question: '支持哪些名字类型？',
+    answer: '当前支持中文网名、英文网名和中英混合网名，适合做微信昵称、小红书昵称、游戏 ID 或英文社媒名。',
+  },
+  {
+    question: '生成的名字会不会很普通？',
+    answer: '名有意会尽量把你的输入和寓意方向一起理解，再输出名字、寓意标题和解释，目标是让结果更有辨识度、更像你。',
+  },
+  {
+    question: '如果这批结果不满意怎么办？',
+    answer: '你可以直接换一批，也可以返回调整关键词或寓意方向；如果仍然不满意，还可以在结果页提交反馈帮助我们优化。',
+  },
+];
 
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
@@ -627,15 +662,40 @@ export default function App() {
               exit={{ opacity: 0, x: 20 }}
               className="pt-4"
             >
+              <p className="mb-3 text-[11px] uppercase tracking-[0.28em] text-brand-800/40">
+                AI 寓意网名生成器
+              </p>
               <h1 className="font-serif text-[clamp(20px,6.8vw,30px)] leading-[1.35] mb-4 text-brand-900">
-                <span className="block">AI 深度解析你的特质，</span>
-                <span className="block">定制独一无二的专属网名。</span>
+                <span className="block">把你的缩写、生日和情绪，</span>
+                <span className="block">生成成一个有寓意、像你的专属网名。</span>
               </h1>
-              <p className="text-brand-800/70 mb-10 text-[clamp(11px,3.5vw,14px)] leading-[1.6]">
+              <p className="text-brand-800/70 text-[clamp(11px,3.5vw,14px)] leading-[1.7]">
                 <span className="block">
-                  不仅是一个代号，更是你的个性表达。输入关键词，AI 将结合文学意象与情感共鸣，为你深度创作。
+                  输入 1-2 个关键词，快速获得 3 个适合微信昵称、小红书昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
                 </span>
               </p>
+              <div className="mb-10 mt-5 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {HOME_SCENES.map((scene) => (
+                    <span
+                      key={scene}
+                      className="rounded-full border border-brand-900/10 bg-white/70 px-3 py-1.5 text-xs text-brand-800/75"
+                    >
+                      {scene}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid gap-2">
+                  {HOME_HIGHLIGHTS.map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-2xl bg-white/70 px-4 py-3 text-sm text-brand-800/80 shadow-[0px_2px_10px_rgba(0,0,0,0.02)]"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="space-y-8">
                 {/* Keywords */}
@@ -749,6 +809,57 @@ export default function App() {
                   <Sparkles size={18} />
                   立即生成
                 </button>
+              </div>
+
+              <div className="mt-12 space-y-8">
+                <section className="rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
+                  <h2 className="font-serif text-xl text-brand-900">适合这些起名场景</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-brand-800/75">
+                    如果你正在找微信昵称、想换一个更有气质的小红书名字、想做游戏 ID，或者想要一个高级感英文名，这里都可以作为灵感入口。
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {HOME_SCENES.map((scene) => (
+                      <span
+                        key={scene}
+                        className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-900"
+                      >
+                        {scene}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h2 className="font-serif text-xl text-brand-900">为什么大家会喜欢名有意</h2>
+                  <div className="mt-4 space-y-3">
+                    {VALUE_PROPS.map((item) => (
+                      <article
+                        key={item.title}
+                        className="rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]"
+                      >
+                        <h3 className="text-base font-medium text-brand-900">{item.title}</h3>
+                        <p className="mt-2 text-sm leading-relaxed text-brand-800/75">{item.desc}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h2 className="font-serif text-xl text-brand-900">常见问题</h2>
+                  <div className="mt-4 space-y-3">
+                    {FAQ_ITEMS.map((item) => (
+                      <details
+                        key={item.question}
+                        className="rounded-[24px] bg-white/75 px-5 py-4 text-sm text-brand-800/80 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]"
+                      >
+                        <summary className="cursor-pointer list-none font-medium text-brand-900">
+                          {item.question}
+                        </summary>
+                        <p className="mt-3 leading-relaxed">{item.answer}</p>
+                      </details>
+                    ))}
+                  </div>
+                </section>
               </div>
             </motion.div>
           )}
