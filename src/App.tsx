@@ -4,7 +4,7 @@ import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, Chevron
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
 import { SharePoster } from './components/SharePoster';
 import { GeneratedName, GenerateParams } from './types';
-import { buildPosterFileName, downloadBlob, exportPosterBlob, sharePosterFile } from './utils/share';
+import { buildPosterFileName, downloadBlob, exportPosterBlob } from './utils/share';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
@@ -232,10 +232,10 @@ export default function App() {
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<GeneratedName | null>(null);
-  const [shareActionPending, setShareActionPending] = useState<'share' | 'download' | null>(null);
+  const [isSavingPoster, setIsSavingPoster] = useState(false);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isKeywordComposing, setIsKeywordComposing] = useState(false);
-  const sharePosterRef = useRef<HTMLDivElement | null>(null);
+  const exportPosterRef = useRef<HTMLDivElement | null>(null);
   const modeHints = MODE_HINTS[nameMode];
   const modeExamples = MODE_EXAMPLES[nameMode];
 
@@ -528,7 +528,7 @@ export default function App() {
   const closeShareModal = () => {
     setShareModalOpen(false);
     setShareTarget(null);
-    setShareActionPending(null);
+    setIsSavingPoster(false);
   };
 
   const openShareModal = (item: GeneratedName) => {
@@ -545,70 +545,12 @@ export default function App() {
     });
   };
 
-  const buildShareText = (item: GeneratedName) => {
-    return `${item.name}｜${item.meaning_title}\n来自名有意的专属网名卡`;
-  };
-
-  const handleSharePoster = async () => {
-    if (!shareTarget || !sharePosterRef.current || shareActionPending) return;
-
-    setShareActionPending('share');
-    try {
-      const blob = await exportPosterBlob(sharePosterRef.current);
-      const fileName = buildPosterFileName(shareTarget.name);
-
-      try {
-        await sharePosterFile({
-          blob,
-          fileName,
-          title: `名有意｜${shareTarget.name}`,
-          text: buildShareText(shareTarget),
-          url: 'https://mingyouyi.cn/',
-        });
-        fireTrack('share_success', {
-          page_name: view,
-          generation_id: shareTarget.generation_id || currentGenerationId,
-          result_rank: shareTarget.result_rank || 0,
-          result_name: shareTarget.name,
-          properties: {
-            share_type: 'system',
-          },
-        });
-        closeShareModal();
-        showNotice('success', '已调起系统分享。');
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          showNotice('error', '已取消分享。');
-          return;
-        }
-
-        downloadBlob(blob, fileName);
-        fireTrack('save_poster', {
-          page_name: view,
-          generation_id: shareTarget.generation_id || currentGenerationId,
-          result_rank: shareTarget.result_rank || 0,
-          result_name: shareTarget.name,
-          properties: {
-            save_reason: 'share_fallback',
-          },
-        });
-        closeShareModal();
-        showNotice('success', '当前环境不支持系统分享，已为你保存海报。');
-      }
-    } catch (error) {
-      console.error('Share poster failed', error);
-      showNotice('error', '分享海报失败，请稍后重试。');
-    } finally {
-      setShareActionPending(null);
-    }
-  };
-
   const handleDownloadPoster = async () => {
-    if (!shareTarget || !sharePosterRef.current || shareActionPending) return;
+    if (!shareTarget || !exportPosterRef.current || isSavingPoster) return;
 
-    setShareActionPending('download');
+    setIsSavingPoster(true);
     try {
-      const blob = await exportPosterBlob(sharePosterRef.current);
+      const blob = await exportPosterBlob(exportPosterRef.current);
       downloadBlob(blob, buildPosterFileName(shareTarget.name));
       fireTrack('save_poster', {
         page_name: view,
@@ -625,7 +567,7 @@ export default function App() {
       console.error('Save poster failed', error);
       showNotice('error', '保存海报失败，请稍后重试。');
     } finally {
-      setShareActionPending(null);
+      setIsSavingPoster(false);
     }
   };
 
@@ -701,6 +643,18 @@ export default function App() {
 
   const isFavorite = (nameStr: string) => favorites.some(f => f.name === nameStr);
 
+  const getResultNameClassName = (name: string) => {
+    const length = Array.from(name || '').length;
+
+    if (length > 20) {
+      return 'text-[clamp(1.85rem,6vw,2.35rem)] leading-[1.08]';
+    }
+    if (length > 14) {
+      return 'text-[clamp(2.05rem,6.8vw,2.7rem)] leading-[1.08]';
+    }
+    return 'text-[clamp(2.35rem,8vw,3rem)] leading-[1.04]';
+  };
+
   // 结果卡片在结果页和收藏页复用，避免重复 UI 结构
   const renderCard = (item: GeneratedName) => (
     <motion.div 
@@ -709,9 +663,11 @@ export default function App() {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-[32px] p-6 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] mb-4"
     >
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="font-serif text-3xl font-medium tracking-tight text-brand-900">{item.name}</h3>
-        <div className="flex gap-2">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className={`break-words font-serif font-medium tracking-tight text-brand-900 ${getResultNameClassName(item.name)}`}>{item.name}</h3>
+        </div>
+        <div className="flex shrink-0 gap-1.5">
           <button
             onClick={() => openShareModal(item)}
             className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
@@ -1160,7 +1116,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-brand-900">分享结果海报</p>
-                  <p className="mt-1 text-xs text-brand-800/60">优先调起系统分享，也可以直接保存 PNG。</p>
+                  <p className="mt-1 text-xs text-brand-800/60">保存为 PNG 图片后，就可以转发到聊天、朋友圈或小红书。</p>
                 </div>
                 <button onClick={closeShareModal} className="p-1 text-brand-800/60">
                   <X size={16} />
@@ -1169,37 +1125,42 @@ export default function App() {
 
               <div className="mx-auto mt-4 w-[min(100%,340px)]">
                 <SharePoster
-                  ref={sharePosterRef}
                   item={shareTarget}
                   keywords={keywords}
                   meaning={meaning}
                   nameMode={nameMode}
+                  variant="preview"
                   className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
                 />
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => void handleSharePoster()}
-                  disabled={shareActionPending !== null}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  <Share2 size={16} />
-                  {shareActionPending === 'share' ? '分享中...' : '系统分享'}
-                </button>
+              <div className="mt-4">
                 <button
                   onClick={() => void handleDownloadPoster()}
-                  disabled={shareActionPending !== null}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900 disabled:opacity-50"
+                  disabled={isSavingPoster}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
                 >
                   <Download size={16} />
-                  {shareActionPending === 'download' ? '保存中...' : '保存海报'}
+                  {isSavingPoster ? '保存中...' : '保存海报'}
                 </button>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {shareTarget && (
+        <div className="pointer-events-none fixed left-[-200vw] top-0 opacity-100">
+          <SharePoster
+            ref={exportPosterRef}
+            item={shareTarget}
+            keywords={keywords}
+            meaning={meaning}
+            nameMode={nameMode}
+            variant="export"
+          />
+        </div>
+      )}
 
       {/* 提交建议后的轻提示，不阻断当前操作 */}
       <AnimatePresence>
