@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X, MessageSquare } from 'lucide-react';
+import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X, MessageSquare, Share2, Download } from 'lucide-react';
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
+import { SharePoster } from './components/SharePoster';
 import { GeneratedName, GenerateParams } from './types';
+import { buildPosterFileName, downloadBlob, exportPosterBlob, sharePosterFile } from './utils/share';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
@@ -228,8 +230,12 @@ export default function App() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState<GeneratedName | null>(null);
+  const [shareActionPending, setShareActionPending] = useState<'share' | 'download' | null>(null);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isKeywordComposing, setIsKeywordComposing] = useState(false);
+  const sharePosterRef = useRef<HTMLDivElement | null>(null);
   const modeHints = MODE_HINTS[nameMode];
   const modeExamples = MODE_EXAMPLES[nameMode];
 
@@ -293,6 +299,11 @@ export default function App() {
     });
   };
 
+  const showNotice = (type: 'success' | 'error', text: string) => {
+    setFeedbackNotice({ type, text });
+    window.setTimeout(() => setFeedbackNotice(null), 2200);
+  };
+
   useEffect(() => {
     // React StrictMode 在开发环境会触发双挂载，这里做一次运行时去重，避免曝光重复上报
     if (homeExposureTrackedInRuntime) return;
@@ -312,6 +323,7 @@ export default function App() {
     const onPopState = (event: PopStateEvent) => {
       const nextView = event.state?.appView as HistoryView | undefined;
       setFeedbackModalOpen(false);
+      setShareModalOpen(false);
 
       if (nextView === 'home' || nextView === 'results' || nextView === 'favorites') {
         setView(nextView);
@@ -457,12 +469,10 @@ export default function App() {
       setFeedbackText('');
       setFeedbackModalOpen(false);
       // 使用轻提示替代 alert，避免打断用户操作流
-      setFeedbackNotice({ type: 'success', text: '感谢反馈，我们已收到你的建议。' });
-      setTimeout(() => setFeedbackNotice(null), 2200);
+      showNotice('success', '感谢反馈，我们已收到你的建议。');
     } catch (e) {
       console.error('Submit general feedback failed', e);
-      setFeedbackNotice({ type: 'error', text: '反馈提交失败，请稍后重试。' });
-      setTimeout(() => setFeedbackNotice(null), 2200);
+      showNotice('error', '反馈提交失败，请稍后重试。');
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -512,6 +522,110 @@ export default function App() {
       });
     } catch (err) {
       console.error('Failed to copy', err);
+    }
+  };
+
+  const closeShareModal = () => {
+    setShareModalOpen(false);
+    setShareTarget(null);
+    setShareActionPending(null);
+  };
+
+  const openShareModal = (item: GeneratedName) => {
+    setShareTarget(item);
+    setShareModalOpen(true);
+    fireTrack('click_share', {
+      page_name: view,
+      generation_id: item.generation_id || currentGenerationId,
+      result_rank: item.result_rank || 0,
+      result_name: item.name,
+      properties: {
+        entry: 'card_action',
+      },
+    });
+  };
+
+  const buildShareText = (item: GeneratedName) => {
+    return `${item.name}｜${item.meaning_title}\n来自名有意的专属网名卡`;
+  };
+
+  const handleSharePoster = async () => {
+    if (!shareTarget || !sharePosterRef.current || shareActionPending) return;
+
+    setShareActionPending('share');
+    try {
+      const blob = await exportPosterBlob(sharePosterRef.current);
+      const fileName = buildPosterFileName(shareTarget.name);
+
+      try {
+        await sharePosterFile({
+          blob,
+          fileName,
+          title: `名有意｜${shareTarget.name}`,
+          text: buildShareText(shareTarget),
+          url: 'https://mingyouyi.cn/',
+        });
+        fireTrack('share_success', {
+          page_name: view,
+          generation_id: shareTarget.generation_id || currentGenerationId,
+          result_rank: shareTarget.result_rank || 0,
+          result_name: shareTarget.name,
+          properties: {
+            share_type: 'system',
+          },
+        });
+        closeShareModal();
+        showNotice('success', '已调起系统分享。');
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          showNotice('error', '已取消分享。');
+          return;
+        }
+
+        downloadBlob(blob, fileName);
+        fireTrack('save_poster', {
+          page_name: view,
+          generation_id: shareTarget.generation_id || currentGenerationId,
+          result_rank: shareTarget.result_rank || 0,
+          result_name: shareTarget.name,
+          properties: {
+            save_reason: 'share_fallback',
+          },
+        });
+        closeShareModal();
+        showNotice('success', '当前环境不支持系统分享，已为你保存海报。');
+      }
+    } catch (error) {
+      console.error('Share poster failed', error);
+      showNotice('error', '分享海报失败，请稍后重试。');
+    } finally {
+      setShareActionPending(null);
+    }
+  };
+
+  const handleDownloadPoster = async () => {
+    if (!shareTarget || !sharePosterRef.current || shareActionPending) return;
+
+    setShareActionPending('download');
+    try {
+      const blob = await exportPosterBlob(sharePosterRef.current);
+      downloadBlob(blob, buildPosterFileName(shareTarget.name));
+      fireTrack('save_poster', {
+        page_name: view,
+        generation_id: shareTarget.generation_id || currentGenerationId,
+        result_rank: shareTarget.result_rank || 0,
+        result_name: shareTarget.name,
+        properties: {
+          save_reason: 'manual',
+        },
+      });
+      closeShareModal();
+      showNotice('success', '海报已开始保存。');
+    } catch (error) {
+      console.error('Save poster failed', error);
+      showNotice('error', '保存海报失败，请稍后重试。');
+    } finally {
+      setShareActionPending(null);
     }
   };
 
@@ -598,6 +712,14 @@ export default function App() {
       <div className="flex justify-between items-start mb-4">
         <h3 className="font-serif text-3xl font-medium tracking-tight text-brand-900">{item.name}</h3>
         <div className="flex gap-2">
+          <button
+            onClick={() => openShareModal(item)}
+            className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
+            aria-label="分享结果海报"
+            title="分享"
+          >
+            <Share2 size={18} />
+          </button>
           <button 
             onClick={() => copyToClipboard(item)}
             className="p-2 rounded-full bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors"
@@ -1024,6 +1146,60 @@ export default function App() {
         <MessageSquare size={16} />
         意见反馈
       </button>
+
+      <AnimatePresence>
+        {shareModalOpen && shareTarget && (
+          <>
+            <div className="fixed inset-0 z-30 bg-black/30" onClick={closeShareModal} />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed left-4 right-4 bottom-6 z-40 rounded-[28px] bg-white p-4 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-brand-900">分享结果海报</p>
+                  <p className="mt-1 text-xs text-brand-800/60">优先调起系统分享，也可以直接保存 PNG。</p>
+                </div>
+                <button onClick={closeShareModal} className="p-1 text-brand-800/60">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mx-auto mt-4 w-[min(100%,340px)]">
+                <SharePoster
+                  ref={sharePosterRef}
+                  item={shareTarget}
+                  keywords={keywords}
+                  meaning={meaning}
+                  nameMode={nameMode}
+                  className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
+                />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => void handleSharePoster()}
+                  disabled={shareActionPending !== null}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  <Share2 size={16} />
+                  {shareActionPending === 'share' ? '分享中...' : '系统分享'}
+                </button>
+                <button
+                  onClick={() => void handleDownloadPoster()}
+                  disabled={shareActionPending !== null}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900 disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  {shareActionPending === 'download' ? '保存中...' : '保存海报'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* 提交建议后的轻提示，不阻断当前操作 */}
       <AnimatePresence>

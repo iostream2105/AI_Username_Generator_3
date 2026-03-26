@@ -10,6 +10,9 @@
 - `generate_success`
 - `click_copy`
 - `click_favorite`
+- `click_share`
+- `share_success`
+- `save_poster`
 - `click_regenerate`
 - `back_modify`
 - `trigger_paywall`
@@ -40,6 +43,9 @@
 - 结果停留时长：事件 `properties.dwell_sec` 聚合
 - 复制率：`click_copy / generate_success`
 - 收藏率：`click_favorite / generate_success`
+- 分享点击率：`click_share / generate_success`
+- 分享成功率：`share_success / click_share`
+- 海报保存率：`save_poster / generate_success`
 - 换一批率：`click_regenerate / generate_success`
 - 二次生成率：同一 `user_key` 在 24h 内 `click_generate` >= 2
 - 留存：按 `user_key + 日期` 在次日/7日是否再次出现事件
