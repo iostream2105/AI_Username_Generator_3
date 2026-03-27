@@ -378,6 +378,8 @@ function buildGenerationPrompt(params: {
 
 模式要求：
 ${mode.namingRules.map((rule, idx) => `${idx + 1}. ${rule}`).join("\n")}
+强约束：
+- ${buildModeGuardPrompt(nameMode)}
 
 输出要求：
 1. 生成 3 个候选名字。
@@ -410,6 +412,22 @@ function hasLatinChar(text: string) {
   return LATIN_CHAR_REGEX.test(text);
 }
 
+function isNameCompatibleWithMode(name: string, mode: NameMode) {
+  const normalizedName = String(name || "").trim();
+  const containsCjk = hasCjkChar(normalizedName);
+  const containsLatin = hasLatinChar(normalizedName);
+
+  if (mode === "en") {
+    return containsLatin && !containsCjk;
+  }
+
+  if (mode === "mix") {
+    return containsLatin && containsCjk;
+  }
+
+  return containsCjk && !containsLatin;
+}
+
 function validateItemsByMode(items: NameItem[], mode: NameMode) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("INVALID_MODE_OUTPUT");
@@ -420,28 +438,9 @@ function validateItemsByMode(items: NameItem[], mode: NameMode) {
     throw new Error("INVALID_MODE_OUTPUT");
   }
 
-  const enLikeCount = names.filter((name) => hasLatinChar(name) && !hasCjkChar(name)).length;
-  const cnLikeCount = names.filter((name) => hasCjkChar(name) && !hasLatinChar(name)).length;
-  const mixLikeCount = names.filter((name) => hasCjkChar(name) && hasLatinChar(name)).length;
-
-  if (mode === "en") {
-    // 英文模式要求至少 2/3 为纯英文形态，避免误返回全中文。
-    if (enLikeCount < 2) {
-      throw new Error("INVALID_MODE_OUTPUT");
-    }
-    return;
-  }
-
-  if (mode === "mix") {
-    // 中英混合模式要求至少 2/3 同时包含中英文元素。
-    if (mixLikeCount < 2) {
-      throw new Error("INVALID_MODE_OUTPUT");
-    }
-    return;
-  }
-
-  // 中文模式要求至少 2/3 为纯中文形态。
-  if (cnLikeCount < 2) {
+  // 模式校验必须逐条通过，避免“2 个符合 + 1 个串模式”的结果漏到前端。
+  const invalidNames = names.filter((name) => !isNameCompatibleWithMode(name, mode));
+  if (invalidNames.length > 0) {
     throw new Error("INVALID_MODE_OUTPUT");
   }
 }
