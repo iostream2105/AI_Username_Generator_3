@@ -104,7 +104,7 @@ const FAQ_ITEMS = [
   },
   {
     question: '支持哪些名字类型？',
-    answer: '当前支持中文网名、英文网名和中英混合网名，适合做 QQ / 微信昵称、小红书昵称、抖音昵称、游戏 ID 或英文社媒名。',
+    answer: '当前支持中文网名、英文网名和中英混合网名，适合做 QQ / 微信昵称、小红书 / 抖音昵称、游戏 ID 或英文社媒名。',
   },
   {
     question: '生成的名字会不会很普通？',
@@ -829,21 +829,10 @@ export default function App() {
               </h1>
               <p className="text-brand-800/70 text-[clamp(11px,3.5vw,14px)] leading-[1.7]">
                 <span className="block">
-                  输入 1-2 个关键词，快速获得 3 个适合 QQ / 微信昵称、小红书昵称、抖音昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
+                  输入 1-2 个关键词，快速获得 3 个适合 QQ / 微信昵称、小红书 / 抖音昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
                 </span>
               </p>
-              <div className="mb-10 mt-5">
-                <div className="flex flex-wrap gap-2">
-                  {HOME_SCENES.map((scene) => (
-                    <span
-                      key={scene}
-                      className="rounded-full border border-brand-900/10 bg-white/70 px-3 py-1.5 text-xs text-brand-800/75"
-                    >
-                      {scene}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <div className="mb-10 mt-5" />
 
               <div className="space-y-8">
                 {/* Keywords */}
