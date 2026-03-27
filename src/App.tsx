@@ -208,16 +208,16 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 
 const AutoFitName = ({
   text,
-  maxFontSize = 52,
-  minFontSize = 18,
+  defaultFontSize = 40,
+  minFontSize = 24,
 }: {
   text: string;
-  maxFontSize?: number;
+  defaultFontSize?: number;
   minFontSize?: number;
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLHeadingElement | null>(null);
-  const [fontSize, setFontSize] = useState(maxFontSize);
+  const [fontSize, setFontSize] = useState(defaultFontSize);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -243,8 +243,13 @@ const AutoFitName = ({
         return context.measureText(text).width + letterSpacing * Math.max(charCount - 1, 0);
       };
 
+      if (getTextWidth(defaultFontSize) <= availableWidth) {
+        setFontSize(defaultFontSize);
+        return;
+      }
+
       let low = minFontSize;
-      let high = maxFontSize;
+      let high = defaultFontSize;
       let best = minFontSize;
 
       while (low <= high) {
@@ -271,7 +276,7 @@ const AutoFitName = ({
     const handleResize = () => measure();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [text, maxFontSize, minFontSize]);
+  }, [text, defaultFontSize, minFontSize]);
 
   return (
     <div ref={containerRef} className="min-w-0">
