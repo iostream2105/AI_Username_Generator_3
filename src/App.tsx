@@ -82,8 +82,7 @@ const MODE_EXAMPLES: Record<NameMode, Array<{ name: string; input: string; descT
   ],
 };
 
-const HOME_SCENES = ['微信昵称', '小红书昵称', '游戏 ID', '英文社媒名'];
-const HOME_HIGHLIGHTS = ['输入 1-2 个关键词即可生成', '每次返回 3 个有寓意的结果', '支持中文 / 英文 / 中英混合'];
+const HOME_SCENES = ['QQ 昵称', '微信昵称', '小红书昵称', '抖音昵称', '游戏 ID', '英文社媒名'];
 const VALUE_PROPS = [
   {
     title: '不是随机拼词',
@@ -105,7 +104,7 @@ const FAQ_ITEMS = [
   },
   {
     question: '支持哪些名字类型？',
-    answer: '当前支持中文网名、英文网名和中英混合网名，适合做微信昵称、小红书昵称、游戏 ID 或英文社媒名。',
+    answer: '当前支持中文网名、英文网名和中英混合网名，适合做 QQ / 微信昵称、小红书昵称、抖音昵称、游戏 ID 或英文社媒名。',
   },
   {
     question: '生成的名字会不会很普通？',
@@ -830,10 +829,10 @@ export default function App() {
               </h1>
               <p className="text-brand-800/70 text-[clamp(11px,3.5vw,14px)] leading-[1.7]">
                 <span className="block">
-                  输入 1-2 个关键词，快速获得 3 个适合微信昵称、小红书昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
+                  输入 1-2 个关键词，快速获得 3 个适合 QQ / 微信昵称、小红书昵称、抖音昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
                 </span>
               </p>
-              <div className="mb-10 mt-5 space-y-3">
+              <div className="mb-10 mt-5">
                 <div className="flex flex-wrap gap-2">
                   {HOME_SCENES.map((scene) => (
                     <span
@@ -842,16 +841,6 @@ export default function App() {
                     >
                       {scene}
                     </span>
-                  ))}
-                </div>
-                <div className="grid gap-2">
-                  {HOME_HIGHLIGHTS.map((item) => (
-                    <div
-                      key={item}
-                      className="rounded-2xl bg-white/70 px-4 py-3 text-sm text-brand-800/80 shadow-[0px_2px_10px_rgba(0,0,0,0.02)]"
-                    >
-                      {item}
-                    </div>
                   ))}
                 </div>
               </div>
@@ -974,7 +963,7 @@ export default function App() {
                 <section className="rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
                   <h2 className="font-serif text-xl text-brand-900">适合这些起名场景</h2>
                   <p className="mt-2 text-sm leading-relaxed text-brand-800/75">
-                    如果你正在找微信昵称、想换一个更有气质的小红书名字、想做游戏 ID，或者想要一个高级感英文名，这里都可以作为灵感入口。
+                    如果你正在找 QQ / 微信昵称、想换一个更有辨识度的小红书或抖音昵称、想做游戏 ID，或者想要一个高级感英文社媒名，这里都可以作为灵感入口。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {HOME_SCENES.map((scene) => (
