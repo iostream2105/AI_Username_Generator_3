@@ -120,6 +120,7 @@ const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '�
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
 const LOADING_STAGE_TEXTS = ['正在理解关键词...','正在为你寻找灵感...', '正在创作...', '正在润色...'];
+const SHARE_POSTER_PREVIEW_BASE_WIDTH = 320;
 let homeExposureTrackedInRuntime = false;
 
 function createLocalId() {
@@ -318,11 +319,88 @@ export default function App() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState<GeneratedName | null>(null);
   const [isSavingPoster, setIsSavingPoster] = useState(false);
+  const [sharePreviewScale, setSharePreviewScale] = useState(1);
+  const [sharePreviewBaseHeight, setSharePreviewBaseHeight] = useState(620);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [isKeywordComposing, setIsKeywordComposing] = useState(false);
   const exportPosterRef = useRef<HTMLDivElement | null>(null);
+  const shareModalViewportRef = useRef<HTMLDivElement | null>(null);
+  const shareModalCardRef = useRef<HTMLDivElement | null>(null);
+  const shareModalHeaderRef = useRef<HTMLDivElement | null>(null);
+  const shareModalActionsRef = useRef<HTMLDivElement | null>(null);
+  const sharePreviewContentRef = useRef<HTMLDivElement | null>(null);
   const modeHints = MODE_HINTS[nameMode];
   const modeExamples = MODE_EXAMPLES[nameMode];
+
+  useLayoutEffect(() => {
+    if (!shareModalOpen || !shareTarget || typeof window === 'undefined') {
+      setSharePreviewScale(1);
+      return;
+    }
+
+    let frameId = 0;
+
+    const measurePreviewScale = () => {
+      const viewport = shareModalViewportRef.current;
+      const card = shareModalCardRef.current;
+      const header = shareModalHeaderRef.current;
+      const actions = shareModalActionsRef.current;
+      const previewContent = sharePreviewContentRef.current;
+      if (!viewport || !card || !header || !actions || !previewContent) return;
+
+      const viewportStyles = window.getComputedStyle(viewport);
+      const cardStyles = window.getComputedStyle(card);
+      const viewportHeight =
+        viewport.clientHeight -
+        (Number.parseFloat(viewportStyles.paddingTop || '0') || 0) -
+        (Number.parseFloat(viewportStyles.paddingBottom || '0') || 0);
+      const contentWidth =
+        card.clientWidth -
+        (Number.parseFloat(cardStyles.paddingLeft || '0') || 0) -
+        (Number.parseFloat(cardStyles.paddingRight || '0') || 0);
+      const cardVerticalPadding =
+        (Number.parseFloat(cardStyles.paddingTop || '0') || 0) +
+        (Number.parseFloat(cardStyles.paddingBottom || '0') || 0);
+      const previewHeight = previewContent.offsetHeight || 620;
+      const spacingBudget = 24;
+      const availablePreviewHeight =
+        viewportHeight - cardVerticalPadding - header.offsetHeight - actions.offsetHeight - spacingBudget;
+
+      setSharePreviewBaseHeight(previewHeight);
+
+      const widthScale = contentWidth > 0 ? contentWidth / SHARE_POSTER_PREVIEW_BASE_WIDTH : 1;
+      const heightScale = availablePreviewHeight > 0 ? availablePreviewHeight / previewHeight : 1;
+      const nextScale = Math.min(1, widthScale, heightScale);
+
+      setSharePreviewScale(Math.max(0.52, nextScale || 1));
+    };
+
+    const scheduleMeasure = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(measurePreviewScale);
+    };
+
+    scheduleMeasure();
+    window.addEventListener('resize', scheduleMeasure);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(scheduleMeasure);
+      [shareModalViewportRef.current, shareModalCardRef.current, shareModalHeaderRef.current, shareModalActionsRef.current, sharePreviewContentRef.current].forEach((element) => {
+        if (element) observer?.observe(element);
+      });
+    }
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+      window.removeEventListener('resize', scheduleMeasure);
+      observer?.disconnect();
+    };
+  }, [shareModalOpen, shareTarget, keywords, meaning, nameMode]);
 
   // 统一视图切换：同步 React 视图与浏览器 history，保障系统返回键可按层级回退
   const navigateToView = (nextView: AppView, mode: 'push' | 'replace' | 'none' = 'push') => {
@@ -1171,14 +1249,21 @@ export default function App() {
         {shareModalOpen && shareTarget && (
           <>
             <div className="fixed inset-0 z-30 bg-black/30" onClick={closeShareModal} />
-            <div className="fixed inset-0 z-40 flex items-end justify-center overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-[calc(env(safe-area-inset-bottom)+20px)]">
+            <div
+              ref={shareModalViewportRef}
+              className="fixed inset-0 z-40 flex items-end justify-center overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-[calc(env(safe-area-inset-bottom)+20px)]"
+            >
               <motion.div
+                ref={shareModalCardRef}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
                 className="w-full max-w-[380px] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-32px)] overflow-y-auto rounded-[28px] bg-white p-4 shadow-2xl"
               >
-                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 flex items-start justify-between bg-white/96 px-4 pb-3 pt-4 backdrop-blur">
+                <div
+                  ref={shareModalHeaderRef}
+                  className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 flex items-start justify-between bg-white/96 px-4 pb-3 pt-4 backdrop-blur"
+                >
                   <div className="pr-3">
                     <p className="text-sm font-medium text-brand-900">分享结果海报</p>
                     <p className="mt-1 text-xs leading-relaxed text-brand-800/60">保存为 PNG 图片后，就可以转发到聊天、朋友圈或小红书。</p>
@@ -1192,18 +1277,36 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="mx-auto mt-2 w-[min(100%,320px)]">
-                  <SharePoster
-                    item={shareTarget}
-                    keywords={keywords}
-                    meaning={meaning}
-                    nameMode={nameMode}
-                    variant="preview"
-                    className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
-                  />
+                <div className="mx-auto mt-2 flex justify-center">
+                  <div
+                    className="relative overflow-hidden"
+                    style={{
+                      width: `${SHARE_POSTER_PREVIEW_BASE_WIDTH * sharePreviewScale}px`,
+                      height: `${sharePreviewBaseHeight * sharePreviewScale}px`,
+                    }}
+                  >
+                    <div
+                      ref={sharePreviewContentRef}
+                      className="origin-top-left"
+                      style={{
+                        width: `${SHARE_POSTER_PREVIEW_BASE_WIDTH}px`,
+                        transform: `scale(${sharePreviewScale})`,
+                        transformOrigin: 'top left',
+                      }}
+                    >
+                      <SharePoster
+                        item={shareTarget}
+                        keywords={keywords}
+                        meaning={meaning}
+                        nameMode={nameMode}
+                        variant="preview"
+                        className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-4">
+                <div ref={shareModalActionsRef} className="mt-4">
                   <button
                     onClick={() => void handleDownloadPoster()}
                     disabled={isSavingPoster}
