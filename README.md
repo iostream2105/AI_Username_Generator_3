@@ -2,6 +2,15 @@
 
 这是一个前后端分离的 AI 命名生成项目。用户输入关键词，并可选期望寓意，可按模式生成中文网名、英文名字或中英混合名字（每次返回 3 个候选及解释）。
 
+## 当前已落地能力
+- 首页支持输入 `1-2` 个关键词，并可选“期望寓意”后生成 3 个结果。
+- 支持 `cn / en / mix` 三种模式，后端会严格校验每个结果与当前模式一致。
+- 结果支持复制、收藏、保存 PNG 海报。
+- 收藏记录会保存收藏当时的输入上下文：关键词、寓意方向、生成模式。
+- 收藏页再次打开分享海报时，会优先展示该条收藏对应的真实输入，而不是通用占位文案。
+- 移动端切后台后，应用会尽量恢复结果页、收藏页和分享海报弹窗状态。
+- 后台管理端支持总览看板、生成记录、事件日志、收藏记录、反馈列表和 CSV 导出。
+
 ## 当前线上部署
 - 主域名（前后端同域）：
   https://mingyouyi.cn/
@@ -17,11 +26,16 @@
 - `src/AdminApp.tsx`：后台管理端页面（`/admin`）
 - `src/admin/`：后台管理端 API 封装与类型定义
 - `src/services/ai.ts`：前端 API 请求与埋点上报封装
+- `src/components/SharePoster.tsx`：分享海报组件（预览与导出共用）
+- `src/utils/share.ts`：海报导出与下载工具
+- `src/utils/clipboard.ts`：复制能力封装（含移动端降级方案）
 - `server/index.ts`：Express 后端服务（生成接口、收藏接口、埋点接口、反馈接口）
 - `server/db.ts`：MySQL 连接与数据访问层（收藏 + 埋点 + 用户反馈）
 - `sql/app_schema.sql`：数据库结构（埋点 + 收藏 + 反馈，合并版）
+- `sql/2026-03-28_add_favorite_context.sql`：收藏上下文字段增量迁移脚本
 - `sql/analytics_tracking_design.md`：埋点事件字典与指标映射
 - `Dockerfile`：CloudRun 容器构建配置
+- `DEPLOYMENT.md`：部署流程文档
 
 说明：`cloudfunctions/generateApi/` 备用云函数方案已下线，当前仅保留 CloudRun 后端。
 
@@ -45,12 +59,22 @@ npm install
 DOUBAO_API_KEY=你的豆包密钥
 FRONTEND_ORIGIN=http://localhost:3000
 
+# 后台管理端登录
+ADMIN_USERNAME=你的后台账号
+ADMIN_PASSWORD=你的后台密码
+ADMIN_TOKEN_EXPIRE_HOURS=12
+
 # MySQL（收藏与埋点写库）
 DB_HOST=你的MySQL地址
 DB_PORT=3306
 DB_USER=你的用户名
 DB_PASSWORD=你的密码
 DB_NAME=你的数据库名（例如 mingyouyi）
+```
+
+也可以使用单连接串配置：
+```bash
+DB_URL=mysql://user:password@host:3306/mingyouyi
 ```
 
 补充：当前生产环境后端数据库库名为 `mingyouyi`，敏感连接信息仅保存在 CloudRun 环境变量中，不写入仓库。
@@ -86,6 +110,14 @@ npm run dev
 - `POST /api/admin/login` 使用账号密码换取 token。
 - 其余 `/api/admin/*` 接口需要携带请求头：`Authorization: Bearer <token>`。
 
+收藏接口补充说明：
+- `POST /api/favorites` 会同时保存收藏当时的结果内容和输入上下文。
+- `GET /api/favorites` 返回的每条收藏除了名字与解释，还会带回：
+  - `generation_id`
+  - `favorite_keywords`
+  - `favorite_meaning`
+  - `favorite_name_mode`
+
 ## 生成策略说明（当前实现）
 - 模型：`doubao-seed-1-8-251228`（结构化输出）。
 - 后端会使用 `json_schema` 约束模型返回结构，优先解析 `{"items":[...]}`。
@@ -97,7 +129,23 @@ npm run dev
 - 前端已移除“偏好风格”选项，当前仅保留“期望寓意”（选填）。
 - Prompt 已增强“立体深意/高级感/独特性”引导，并对缩写（如 `zk`/`wsz`）做语义化融合，降低“中文+字母硬拼”现象。
 - 在 `mix` 模式且关键词为 3 位缩写时，会引导模型在 3 个结果里自然包含 `1-2` 个“三字中文 + 英文片段”结构。
+- 后端会按当前模式对 3 个结果逐条做兼容性校验，避免中文模式混入英文结果、或英文模式混入中文结果。
 - 结果解释不再出现“本次优先融合...”措辞。
+
+## 收藏与分享海报
+- 当前仅保留“保存海报”能力，不再提供系统分享按钮。
+- 海报采用三卡片布局：
+  - 第 1 张卡片：生成结果、寓意标题、解释、风格标签
+  - 第 2 张卡片：用户输入的关键词 / 寓意方向
+  - 第 3 张卡片：产品介绍与站点地址 `mingyouyi.cn`
+- 海报预览会根据移动端弹窗空间自动缩放，但导出的图片仍使用独立的高清导出节点。
+- 点击分享会记录 `click_share` 埋点，保存海报会记录 `save_poster` 埋点。
+- 收藏页分享海报会优先读取收藏记录里的输入快照。
+
+## 移动端兼容补充
+- 复制功能使用 `navigator.clipboard` + `execCommand('copy')` 双通道兜底，提升手机浏览器兼容性。
+- 分享海报弹窗会根据可视区域自动缩放，尽量保证预览内容和“保存海报”按钮同时可见。
+- 结果页、收藏页和分享海报弹窗状态会写入 `sessionStorage`，手机切后台后再次进入时优先恢复现场。
 
 ## 关键接口示例
 `POST /api/generate` 请求体：
@@ -135,13 +183,18 @@ npm run dev
 ```bash
 npm run lint
 npm run build
-npm run build:prod
 npm run preview
 ```
 
 说明：
-- `npm run build:prod`：当前与 `npm run build` 等价，默认走同域 `/api`，不再强制注入 `VITE_API_BASE_URL`。
+- 当前仓库没有单独的 `build:prod` 脚本，生产构建直接使用 `npm run build`。
 - 仅在“前端需要跨域直连后端”时，才建议显式设置 `VITE_API_BASE_URL`。
+
+## 数据库迁移说明
+- 首次建库请执行：`sql/app_schema.sql`
+- 已有库升级到“收藏上下文”能力时，请手动执行：`sql/2026-03-28_add_favorite_context.sql`
+- 当前后端启动时不会自动执行表结构迁移或历史数据回填，数据库变更需显式执行 SQL
+- 建议将每次数据库变更记录到部署流程中，避免线上与本地结构不一致
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
@@ -165,6 +218,8 @@ npm run preview
 ## 文档索引
 - 协作规范：`AGENTS.md`
 - 技术文档：`TECHNICAL.md`
+- 部署文档：`DEPLOYMENT.md`
 - 后台文档：`ADMIN_DASHBOARD.md`
 - PRD：`PRD.md`
 - 数据库结构：`sql/app_schema.sql`
+- 收藏上下文迁移：`sql/2026-03-28_add_favorite_context.sql`
