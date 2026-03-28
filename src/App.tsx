@@ -1171,44 +1171,50 @@ export default function App() {
         {shareModalOpen && shareTarget && (
           <>
             <div className="fixed inset-0 z-30 bg-black/30" onClick={closeShareModal} />
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="fixed left-4 right-4 bottom-6 z-40 rounded-[28px] bg-white p-4 shadow-2xl"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-brand-900">分享结果海报</p>
-                  <p className="mt-1 text-xs text-brand-800/60">保存为 PNG 图片后，就可以转发到聊天、朋友圈或小红书。</p>
+            <div className="fixed inset-0 z-40 flex items-end justify-center overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top)+12px)] pb-[calc(env(safe-area-inset-bottom)+20px)]">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="w-full max-w-[380px] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-32px)] overflow-y-auto rounded-[28px] bg-white p-4 shadow-2xl"
+              >
+                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-4 flex items-start justify-between bg-white/96 px-4 pb-3 pt-4 backdrop-blur">
+                  <div className="pr-3">
+                    <p className="text-sm font-medium text-brand-900">分享结果海报</p>
+                    <p className="mt-1 text-xs leading-relaxed text-brand-800/60">保存为 PNG 图片后，就可以转发到聊天、朋友圈或小红书。</p>
+                  </div>
+                  <button
+                    onClick={closeShareModal}
+                    className="rounded-full bg-brand-50 p-2 text-brand-800/70 transition-colors hover:bg-brand-100"
+                    aria-label="关闭分享海报弹窗"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
-                <button onClick={closeShareModal} className="p-1 text-brand-800/60">
-                  <X size={16} />
-                </button>
-              </div>
 
-              <div className="mx-auto mt-4 w-[min(100%,340px)]">
-                <SharePoster
-                  item={shareTarget}
-                  keywords={keywords}
-                  meaning={meaning}
-                  nameMode={nameMode}
-                  variant="preview"
-                  className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
-                />
-              </div>
+                <div className="mx-auto mt-2 w-[min(100%,320px)]">
+                  <SharePoster
+                    item={shareTarget}
+                    keywords={keywords}
+                    meaning={meaning}
+                    nameMode={nameMode}
+                    variant="preview"
+                    className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
+                  />
+                </div>
 
-              <div className="mt-4">
-                <button
-                  onClick={() => void handleDownloadPoster()}
-                  disabled={isSavingPoster}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  <Download size={16} />
-                  {isSavingPoster ? '保存中...' : '保存海报'}
-                </button>
-              </div>
-            </motion.div>
+                <div className="mt-4">
+                  <button
+                    onClick={() => void handleDownloadPoster()}
+                    disabled={isSavingPoster}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#5A5A40] px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {isSavingPoster ? '保存中...' : '保存海报'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
