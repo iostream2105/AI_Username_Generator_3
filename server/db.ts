@@ -228,13 +228,6 @@ export interface AdminFeedbackFilters {
 
 let pool: Pool | null = null;
 
-const FAVORITE_CONTEXT_COLUMNS = {
-  generation_id: "ADD COLUMN generation_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '来源生成流程ID' AFTER style_tags_json",
-  favorite_keywords_json: "ADD COLUMN favorite_keywords_json JSON NULL COMMENT '收藏时的输入关键词JSON' AFTER generation_id",
-  favorite_meaning: "ADD COLUMN favorite_meaning VARCHAR(64) NOT NULL DEFAULT '' COMMENT '收藏时的寓意方向' AFTER favorite_keywords_json",
-  favorite_name_mode: "ADD COLUMN favorite_name_mode VARCHAR(16) NOT NULL DEFAULT 'cn' COMMENT '收藏时的生成模式' AFTER favorite_meaning",
-} as const;
-
 // 支持两种配置方式：单连接串（DB_URL/MYSQL_URL）或拆分字段
 function resolveDbConfig() {
   const connectionUri = process.env.DB_URL || process.env.MYSQL_URL;
@@ -280,8 +273,6 @@ export async function initDb() {
         connectionLimit: 10,
       });
 
-  await ensureFavoriteContextSchema(pool);
-
   return true;
 }
 
@@ -296,111 +287,6 @@ function getDb() {
     throw new Error("DB is not initialized");
   }
   return pool;
-}
-
-async function ensureFavoriteContextSchema(db: Pool) {
-  const [columnRows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT COLUMN_NAME
-      FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_favorite_name'
-    `
-  );
-
-  if (columnRows.length === 0) {
-    return;
-  }
-
-  const existingColumns = new Set(columnRows.map((row) => String(row.COLUMN_NAME || "")));
-  const alterParts: string[] = [];
-
-  for (const [columnName, statement] of Object.entries(FAVORITE_CONTEXT_COLUMNS)) {
-    if (!existingColumns.has(columnName)) {
-      alterParts.push(statement);
-    }
-  }
-
-  const [indexRows] = await db.query<RowDataPacket[]>(
-    `
-      SELECT INDEX_NAME
-      FROM information_schema.STATISTICS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'user_favorite_name'
-        AND INDEX_NAME = 'idx_generation_id'
-    `
-  );
-
-  if (indexRows.length === 0) {
-    alterParts.push("ADD KEY idx_generation_id (generation_id)");
-  }
-
-  if (alterParts.length > 0) {
-    await db.query(`ALTER TABLE user_favorite_name ${alterParts.join(", ")}`);
-  }
-
-  await backfillFavoriteContext(db);
-}
-
-async function backfillFavoriteContext(db: Pool) {
-  try {
-    await db.query(
-      `
-        UPDATE user_favorite_name AS favorite
-        JOIN (
-          SELECT
-            user_key,
-            result_name,
-            SUBSTRING_INDEX(GROUP_CONCAT(generation_id ORDER BY event_time DESC), ',', 1) AS generation_id,
-            SUBSTRING_INDEX(
-              GROUP_CONCAT(JSON_UNQUOTE(JSON_EXTRACT(properties, '$.name_mode')) ORDER BY event_time DESC),
-              ',',
-              1
-            ) AS favorite_name_mode
-          FROM analytics_event_log
-          WHERE event_name = 'click_favorite'
-            AND user_key <> ''
-            AND result_name <> ''
-            AND generation_id <> ''
-          GROUP BY user_key, result_name
-        ) AS event_match
-          ON event_match.user_key = favorite.user_key
-         AND event_match.result_name = favorite.name
-        SET
-          favorite.generation_id = IF(favorite.generation_id = '', event_match.generation_id, favorite.generation_id),
-          favorite.favorite_name_mode = IF(
-            favorite.favorite_name_mode = '' OR favorite.favorite_name_mode IS NULL,
-            COALESCE(NULLIF(event_match.favorite_name_mode, ''), 'cn'),
-            favorite.favorite_name_mode
-          )
-        WHERE favorite.generation_id = ''
-           OR favorite.favorite_name_mode = ''
-           OR favorite.favorite_name_mode IS NULL
-      `
-    );
-
-    await db.query(
-      `
-        UPDATE user_favorite_name AS favorite
-        JOIN analytics_generation_batch AS batch
-          ON batch.generation_id = favorite.generation_id
-        SET
-          favorite.favorite_keywords_json = IF(
-            favorite.favorite_keywords_json IS NULL,
-            batch.keywords_json,
-            favorite.favorite_keywords_json
-          ),
-          favorite.favorite_meaning = IF(
-            favorite.favorite_meaning = '',
-            batch.meaning_tag,
-            favorite.favorite_meaning
-          )
-        WHERE favorite.generation_id <> ''
-          AND (favorite.favorite_keywords_json IS NULL OR favorite.favorite_meaning = '')
-      `
-    );
-  } catch (error: any) {
-    console.warn("Favorite context backfill skipped:", error?.message || error);
-  }
 }
 
 // 统一分页返回结构：
