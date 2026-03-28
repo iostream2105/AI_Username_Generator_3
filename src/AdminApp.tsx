@@ -32,6 +32,73 @@ function getDefaultDateRange() {
   return { startDate: formatDateInput(start), endDate: formatDateInput(end) };
 }
 
+const EVENT_LABELS: Record<string, string> = {
+  home_exposure: "首页曝光",
+  click_generate: "点击生成",
+  generate_success: "生成成功",
+  click_copy: "点击复制",
+  click_favorite: "点击收藏",
+  click_share: "点击分享",
+  save_poster: "保存海报",
+};
+
+const PAGE_LABELS: Record<string, string> = {
+  home: "首页",
+  results: "结果页",
+  favorites: "我的收藏",
+  admin: "后台管理端",
+};
+
+const FEEDBACK_TYPE_LABELS: Record<string, string> = {
+  satisfaction: "满意度反馈",
+  general: "通用建议",
+};
+
+const SATISFACTION_LABELS: Record<string, string> = {
+  satisfied: "满意",
+  unsatisfied: "不满意",
+};
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatAdminDateTime(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  const matched = raw.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (matched) {
+    return `${matched[1]} ${matched[2]}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return [
+    parsed.getFullYear(),
+    pad2(parsed.getMonth() + 1),
+    pad2(parsed.getDate()),
+  ].join("-") + ` ${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}:${pad2(parsed.getSeconds())}`;
+}
+
+function formatEventName(eventName: string) {
+  const label = EVENT_LABELS[eventName];
+  return label ? `${label}（${eventName}）` : eventName || "-";
+}
+
+function formatFeedbackType(feedbackType: string) {
+  return FEEDBACK_TYPE_LABELS[feedbackType] || feedbackType || "-";
+}
+
+function formatSatisfactionValue(value: string) {
+  return SATISFACTION_LABELS[value] || value || "-";
+}
+
+function formatPageName(pageName: string) {
+  const label = PAGE_LABELS[pageName];
+  return label ? `${label}（${pageName}）` : pageName || "-";
+}
+
 const TAB_LABELS: Record<AdminTab, string> = {
   overview: "总览看板",
   generations: "生成记录",
@@ -403,7 +470,7 @@ export default function AdminApp() {
 
           {activeTab === "overview" && overview && (
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                 <div className="rounded-xl bg-brand-50 p-3">
                   <p className="text-xs text-brand-800/70">首页曝光</p>
                   <p className="text-2xl font-semibold text-brand-900">{overview.kpi.home_exposure}</p>
@@ -417,27 +484,41 @@ export default function AdminApp() {
                   <p className="text-2xl font-semibold text-brand-900">{overview.kpi.generate_success}</p>
                 </div>
                 <div className="rounded-xl bg-brand-50 p-3">
-                  <p className="text-xs text-brand-800/70">平均耗时(ms)</p>
+                  <p className="text-xs text-brand-800/70">点击分享</p>
+                  <p className="text-2xl font-semibold text-brand-900">{overview.kpi.click_share}</p>
+                </div>
+                <div className="rounded-xl bg-brand-50 p-3">
+                  <p className="text-xs text-brand-800/70">保存海报</p>
+                  <p className="text-2xl font-semibold text-brand-900">{overview.kpi.save_poster}</p>
+                </div>
+                <div className="rounded-xl bg-brand-50 p-3">
+                  <p className="text-xs text-brand-800/70">平均耗时（ms）</p>
                   <p className="text-2xl font-semibold text-brand-900">{overview.kpi.avg_latency_ms}</p>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
                 <div className="rounded-xl border border-brand-900/10 p-3">生成成功率：{overview.kpi.generate_success_rate}%</div>
                 <div className="rounded-xl border border-brand-900/10 p-3">复制率：{overview.kpi.copy_rate}%</div>
                 <div className="rounded-xl border border-brand-900/10 p-3">收藏率：{overview.kpi.favorite_rate}%</div>
+                <div className="rounded-xl border border-brand-900/10 p-3">分享点击率：{overview.kpi.share_click_rate}%</div>
+                <div className="rounded-xl border border-brand-900/10 p-3">海报保存率：{overview.kpi.poster_save_rate}%</div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-sm">
+                <table className="w-full min-w-[1280px] text-sm">
                   <thead>
                     <tr className="border-b border-brand-900/10 text-left">
                       <th className="py-2">日期</th>
-                      <th>曝光</th>
+                      <th>首页曝光</th>
                       <th>点击生成</th>
                       <th>生成成功</th>
+                      <th>点击分享</th>
+                      <th>保存海报</th>
                       <th>成功率%</th>
+                      <th>分享点击率%</th>
+                      <th>海报保存率%</th>
                       <th>复制率%</th>
                       <th>收藏率%</th>
-                      <th>平均耗时</th>
+                      <th>平均耗时（ms）</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -447,7 +528,11 @@ export default function AdminApp() {
                         <td>{item.home_exposure}</td>
                         <td>{item.click_generate}</td>
                         <td>{item.generate_success}</td>
+                        <td>{item.click_share}</td>
+                        <td>{item.save_poster}</td>
                         <td>{item.generate_success_rate}</td>
+                        <td>{item.share_click_rate}</td>
+                        <td>{item.poster_save_rate}</td>
                         <td>{item.copy_rate}</td>
                         <td>{item.favorite_rate}</td>
                         <td>{item.avg_latency_ms}</td>
@@ -455,7 +540,7 @@ export default function AdminApp() {
                     ))}
                     {!overview.trend.length && (
                       <tr>
-                        <td className="py-4 text-brand-800/60" colSpan={8}>
+                        <td className="py-4 text-brand-800/60" colSpan={12}>
                           当前筛选下暂无数据
                         </td>
                       </tr>
@@ -504,12 +589,12 @@ export default function AdminApp() {
                 <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-brand-900/10 text-left">
-                      <th className="py-2">generation_id</th>
-                      <th>关键词</th>
-                      <th>寓意</th>
-                      <th>风格</th>
+                      <th className="py-2">生成批次 ID</th>
+                      <th>输入关键词</th>
+                      <th>期望寓意</th>
+                      <th>风格标签</th>
                       <th>状态</th>
-                      <th>耗时</th>
+                      <th>耗时（ms）</th>
                       <th>结果数</th>
                       <th>请求时间</th>
                     </tr>
@@ -524,7 +609,7 @@ export default function AdminApp() {
                         <td>{row.is_success ? "成功" : "失败"}</td>
                         <td>{row.latency_ms}</td>
                         <td>{row.result_count}</td>
-                        <td>{row.requested_at}</td>
+                        <td>{formatAdminDateTime(row.requested_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -544,7 +629,7 @@ export default function AdminApp() {
                     setEventName(e.target.value);
                     setEventPage(1);
                   }}
-                  placeholder="事件名"
+                  placeholder="事件标识（如 click_share）"
                   className="rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
                 />
                 <input
@@ -553,7 +638,7 @@ export default function AdminApp() {
                     setEventGenerationId(e.target.value);
                     setEventPage(1);
                   }}
-                  placeholder="generation_id"
+                  placeholder="生成批次 ID"
                   className="rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
                 />
               </div>
@@ -561,23 +646,23 @@ export default function AdminApp() {
                 <table className="w-full min-w-[1300px] text-sm">
                   <thead>
                     <tr className="border-b border-brand-900/10 text-left">
-                      <th className="py-2">event_time</th>
-                      <th>event_name</th>
-                      <th>generation_id</th>
-                      <th>result_name</th>
-                      <th>是否成功</th>
-                      <th>error_code</th>
-                      <th>properties</th>
+                      <th className="py-2">发生时间</th>
+                      <th>事件名称</th>
+                      <th>生成批次 ID</th>
+                      <th>结果名称</th>
+                      <th>执行结果</th>
+                      <th>错误码</th>
+                      <th>附加信息</th>
                     </tr>
                   </thead>
                   <tbody>
                     {eventRows.map((row, idx) => (
                       <tr key={`${row.event_id}_${idx}`} className="border-b border-brand-900/5 align-top">
-                        <td className="py-2">{row.event_time}</td>
-                        <td>{row.event_name}</td>
+                        <td className="py-2">{formatAdminDateTime(row.event_time)}</td>
+                        <td>{formatEventName(row.event_name)}</td>
                         <td>{row.generation_id || "-"}</td>
                         <td>{row.result_name || "-"}</td>
-                        <td>{row.is_success ? "1" : "0"}</td>
+                        <td>{row.is_success ? "成功" : "失败"}</td>
                         <td>{row.error_code || "-"}</td>
                         <td className="max-w-[420px] break-all">{row.properties ? JSON.stringify(row.properties) : "-"}</td>
                       </tr>
@@ -599,7 +684,7 @@ export default function AdminApp() {
                     setFavoriteUserKey(e.target.value);
                     setFavoritePage(1);
                   }}
-                  placeholder="user_key"
+                  placeholder="用户标识"
                   className="rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
                 />
                 <input
@@ -616,11 +701,11 @@ export default function AdminApp() {
                 <table className="w-full min-w-[1200px] text-sm">
                   <thead>
                     <tr className="border-b border-brand-900/10 text-left">
-                      <th className="py-2">user_key</th>
-                      <th>name</th>
+                      <th className="py-2">用户标识</th>
+                      <th>网名</th>
                       <th>寓意标题</th>
                       <th>风格标签</th>
-                      <th>创建时间</th>
+                      <th>收藏时间</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -630,7 +715,7 @@ export default function AdminApp() {
                         <td>{row.name}</td>
                         <td>{row.meaning_title}</td>
                         <td>{(row.style_tags || []).join(", ") || "-"}</td>
-                        <td>{row.created_at}</td>
+                        <td>{formatAdminDateTime(row.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -653,8 +738,8 @@ export default function AdminApp() {
                   className="rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
                 >
                   <option value="">全部类型</option>
-                  <option value="satisfaction">satisfaction</option>
-                  <option value="general">general</option>
+                  <option value="satisfaction">满意度反馈</option>
+                  <option value="general">通用建议</option>
                 </select>
                 <select
                   value={satisfactionValue}
@@ -665,32 +750,32 @@ export default function AdminApp() {
                   className="rounded-lg border border-brand-900/10 px-3 py-2 text-sm"
                 >
                   <option value="">全部满意度</option>
-                  <option value="satisfied">satisfied</option>
-                  <option value="unsatisfied">unsatisfied</option>
+                  <option value="satisfied">满意</option>
+                  <option value="unsatisfied">不满意</option>
                 </select>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1300px] text-sm">
                   <thead>
                     <tr className="border-b border-brand-900/10 text-left">
-                      <th className="py-2">created_at</th>
-                      <th>类型</th>
+                      <th className="py-2">提交时间</th>
+                      <th>反馈类型</th>
                       <th>满意度</th>
                       <th>原因标签</th>
-                      <th>内容</th>
-                      <th>页面</th>
-                      <th>generation_id</th>
+                      <th>反馈内容</th>
+                      <th>所在页面</th>
+                      <th>生成批次 ID</th>
                     </tr>
                   </thead>
                   <tbody>
                     {feedbackRows.map((row, idx) => (
                       <tr key={`${row.user_key}_${row.created_at}_${idx}`} className="border-b border-brand-900/5">
-                        <td className="py-2">{row.created_at}</td>
-                        <td>{row.feedback_type}</td>
-                        <td>{row.satisfaction_value || "-"}</td>
+                        <td className="py-2">{formatAdminDateTime(row.created_at)}</td>
+                        <td>{formatFeedbackType(row.feedback_type)}</td>
+                        <td>{formatSatisfactionValue(row.satisfaction_value)}</td>
                         <td>{row.reason_tag || "-"}</td>
                         <td className="max-w-[420px] break-all">{row.content || "-"}</td>
-                        <td>{row.page_name || "-"}</td>
+                        <td>{formatPageName(row.page_name)}</td>
                         <td>{row.generation_id || "-"}</td>
                       </tr>
                     ))}

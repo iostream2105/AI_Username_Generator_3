@@ -18,9 +18,13 @@ export interface AdminOverviewKpi {
   home_exposure: number;
   click_generate: number;
   generate_success: number;
+  click_share: number;
+  save_poster: number;
   generate_success_rate: number;
   copy_rate: number;
   favorite_rate: number;
+  share_click_rate: number;
+  poster_save_rate: number;
   avg_latency_ms: number;
 }
 
@@ -29,9 +33,13 @@ export interface AdminOverviewTrend {
   home_exposure: number;
   click_generate: number;
   generate_success: number;
+  click_share: number;
+  save_poster: number;
   generate_success_rate: number;
   copy_rate: number;
   favorite_rate: number;
+  share_click_rate: number;
+  poster_save_rate: number;
   avg_latency_ms: number;
 }
 

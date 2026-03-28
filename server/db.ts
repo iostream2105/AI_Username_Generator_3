@@ -113,9 +113,13 @@ export interface AdminOverviewKpi {
   home_exposure: number;
   click_generate: number;
   generate_success: number;
+  click_share: number;
+  save_poster: number;
   generate_success_rate: number;
   copy_rate: number;
   favorite_rate: number;
+  share_click_rate: number;
+  poster_save_rate: number;
   avg_latency_ms: number;
 }
 
@@ -124,9 +128,13 @@ export interface AdminOverviewTrend {
   home_exposure: number;
   click_generate: number;
   generate_success: number;
+  click_share: number;
+  save_poster: number;
   generate_success_rate: number;
   copy_rate: number;
   favorite_rate: number;
+  share_click_rate: number;
+  poster_save_rate: number;
   avg_latency_ms: number;
 }
 
@@ -332,6 +340,41 @@ function normalizeSqlDate(value: unknown) {
   return matched ? matched[0] : text.slice(0, 10);
 }
 
+const shanghaiDateTimeFormatter = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+function formatDateTimeParts(date: Date) {
+  const parts = shanghaiDateTimeFormatter.formatToParts(date);
+  const valueOf = (type: string) => parts.find((part) => part.type === type)?.value || "00";
+  return `${valueOf("year")}-${valueOf("month")}-${valueOf("day")} ${valueOf("hour")}:${valueOf("minute")}:${valueOf("second")}`;
+}
+
+// 统一把 SQL 时间字段格式化成“YYYY-MM-DD HH:mm:ss”，避免前端直接展示 Date.toString()。
+function formatSqlDateTime(value: unknown) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return formatDateTimeParts(value);
+  }
+  const text = String(value).trim();
+  const matched = text.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (matched) {
+    return `${matched[1]} ${matched[2]}`;
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDateTimeParts(parsed);
+  }
+  return text;
+}
+
 // 安全解析 JSON 对象字段（例如 properties），解析失败不抛错直接返回 null
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
@@ -362,7 +405,9 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
         SUM(event_name = 'click_generate') AS click_generate,
         SUM(event_name = 'generate_success' AND is_success = 1) AS generate_success,
         SUM(event_name = 'click_copy') AS click_copy,
-        SUM(event_name = 'click_favorite') AS click_favorite
+        SUM(event_name = 'click_favorite') AS click_favorite,
+        SUM(event_name = 'click_share') AS click_share,
+        SUM(event_name = 'save_poster') AS save_poster
       FROM analytics_event_log
       WHERE event_time >= ? AND event_time < ?
     `,
@@ -385,6 +430,8 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
   const generateSuccess = Number(summary.generate_success || 0);
   const clickCopy = Number(summary.click_copy || 0);
   const clickFavorite = Number(summary.click_favorite || 0);
+  const clickShare = Number(summary.click_share || 0);
+  const savePoster = Number(summary.save_poster || 0);
 
   const [eventTrendRows] = await db.query<RowDataPacket[]>(
     `
@@ -394,7 +441,9 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
         SUM(event_name = 'click_generate') AS click_generate,
         SUM(event_name = 'generate_success' AND is_success = 1) AS generate_success,
         SUM(event_name = 'click_copy') AS click_copy,
-        SUM(event_name = 'click_favorite') AS click_favorite
+        SUM(event_name = 'click_favorite') AS click_favorite,
+        SUM(event_name = 'click_share') AS click_share,
+        SUM(event_name = 'save_poster') AS save_poster
       FROM analytics_event_log
       WHERE event_time >= ? AND event_time < ?
       GROUP BY DATE_FORMAT(event_time, '%Y-%m-%d')
@@ -432,14 +481,20 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
     const success = Number(eventRow?.generate_success || 0);
     const copy = Number(eventRow?.click_copy || 0);
     const favorite = Number(eventRow?.click_favorite || 0);
+    const share = Number(eventRow?.click_share || 0);
+    const save = Number(eventRow?.save_poster || 0);
     return {
       date,
       home_exposure: home,
       click_generate: click,
       generate_success: success,
+      click_share: share,
+      save_poster: save,
       generate_success_rate: safeDivide(success, click),
       copy_rate: safeDivide(copy, success),
       favorite_rate: safeDivide(favorite, success),
+      share_click_rate: safeDivide(share, success),
+      poster_save_rate: safeDivide(save, share),
       avg_latency_ms: Number((latencyTrendMap.get(date) || 0).toFixed(2)),
     };
   }).reverse();
@@ -449,9 +504,13 @@ export async function getAdminOverview(dateRange: AdminDateRange): Promise<Admin
       home_exposure: homeExposure,
       click_generate: clickGenerate,
       generate_success: generateSuccess,
+      click_share: clickShare,
+      save_poster: savePoster,
       generate_success_rate: safeDivide(generateSuccess, clickGenerate),
       copy_rate: safeDivide(clickCopy, generateSuccess),
       favorite_rate: safeDivide(clickFavorite, generateSuccess),
+      share_click_rate: safeDivide(clickShare, generateSuccess),
+      poster_save_rate: safeDivide(savePoster, clickShare),
       avg_latency_ms: Number(avgLatency.toFixed(2)),
     },
     trend,
@@ -520,8 +579,8 @@ export async function listAdminGenerations(filters: AdminGenerationFilters): Pro
       keywords_count: Number(row.keywords_count || 0),
       meaning_tag: String(row.meaning_tag || ""),
       style_tag: String(row.style_tag || ""),
-      requested_at: String(row.requested_at || ""),
-      responded_at: String(row.responded_at || ""),
+      requested_at: formatSqlDateTime(row.requested_at),
+      responded_at: formatSqlDateTime(row.responded_at),
       is_success: Number(row.is_success || 0) === 1,
       latency_ms: Number(row.latency_ms || 0),
       model_name: String(row.model_name || ""),
@@ -589,7 +648,7 @@ export async function listAdminEvents(filters: AdminEventFilters): Promise<Admin
       user_key: String(row.user_key || ""),
       session_id: String(row.session_id || ""),
       event_name: String(row.event_name || ""),
-      event_time: String(row.event_time || ""),
+      event_time: formatSqlDateTime(row.event_time),
       page_name: String(row.page_name || ""),
       generation_id: String(row.generation_id || ""),
       keywords_count: Number(row.keywords_count || 0),
@@ -663,8 +722,8 @@ export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise
       favorite_keywords: parseStyleTags(row.favorite_keywords_json),
       favorite_meaning: String(row.favorite_meaning || ""),
       favorite_name_mode: parseFavoriteNameMode(row.favorite_name_mode),
-      created_at: String(row.created_at || ""),
-      updated_at: String(row.updated_at || ""),
+      created_at: formatSqlDateTime(row.created_at),
+      updated_at: formatSqlDateTime(row.updated_at),
     })),
     pagination: calcPaginationResult(total, filters.pagination),
   };
@@ -724,7 +783,7 @@ export async function listAdminFeedback(filters: AdminFeedbackFilters): Promise<
       content: String(row.content || ""),
       page_name: String(row.page_name || ""),
       generation_id: String(row.generation_id || ""),
-      created_at: String(row.created_at || ""),
+      created_at: formatSqlDateTime(row.created_at),
     })),
     pagination: calcPaginationResult(total, filters.pagination),
   };

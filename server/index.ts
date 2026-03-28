@@ -1109,12 +1109,16 @@ app.get("/api/admin/overview", async (req, res) => {
           generate_success_rate: toPercent(overview.kpi.generate_success_rate),
           copy_rate: toPercent(overview.kpi.copy_rate),
           favorite_rate: toPercent(overview.kpi.favorite_rate),
+          share_click_rate: toPercent(overview.kpi.share_click_rate),
+          poster_save_rate: toPercent(overview.kpi.poster_save_rate),
         },
         trend: overview.trend.map((item: AdminOverviewTrend) => ({
           ...item,
           generate_success_rate: toPercent(item.generate_success_rate),
           copy_rate: toPercent(item.copy_rate),
           favorite_rate: toPercent(item.favorite_rate),
+          share_click_rate: toPercent(item.share_click_rate),
+          poster_save_rate: toPercent(item.poster_save_rate),
         })),
       },
       summary: {
@@ -1304,9 +1308,13 @@ app.get("/api/admin/export", async (req, res) => {
           home_exposure: overview.kpi.home_exposure,
           click_generate: overview.kpi.click_generate,
           generate_success: overview.kpi.generate_success,
+          click_share: overview.kpi.click_share,
+          save_poster: overview.kpi.save_poster,
           generate_success_rate: toPercent(overview.kpi.generate_success_rate),
           copy_rate: toPercent(overview.kpi.copy_rate),
           favorite_rate: toPercent(overview.kpi.favorite_rate),
+          share_click_rate: toPercent(overview.kpi.share_click_rate),
+          poster_save_rate: toPercent(overview.kpi.poster_save_rate),
           avg_latency_ms: overview.kpi.avg_latency_ms,
         },
         ...overview.trend.map((item) => ({
@@ -1314,6 +1322,8 @@ app.get("/api/admin/export", async (req, res) => {
           generate_success_rate: toPercent(item.generate_success_rate),
           copy_rate: toPercent(item.copy_rate),
           favorite_rate: toPercent(item.favorite_rate),
+          share_click_rate: toPercent(item.share_click_rate),
+          poster_save_rate: toPercent(item.poster_save_rate),
         })),
       ];
       const csv = toCsv(
@@ -1322,9 +1332,13 @@ app.get("/api/admin/export", async (req, res) => {
           "home_exposure",
           "click_generate",
           "generate_success",
+          "click_share",
+          "save_poster",
           "generate_success_rate",
           "copy_rate",
           "favorite_rate",
+          "share_click_rate",
+          "poster_save_rate",
           "avg_latency_ms",
         ],
         rows
