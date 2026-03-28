@@ -4,6 +4,7 @@ import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, Chevron
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
 import { SharePoster } from './components/SharePoster';
 import { GeneratedName, GenerateParams } from './types';
+import { copyText } from './utils/clipboard';
 import { buildPosterFileName, downloadBlob, exportPosterBlob } from './utils/share';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
@@ -674,7 +675,11 @@ export default function App() {
   // 复制后记录具体结果序号，便于后端统计 copied_count
   const copyToClipboard = async (item: GeneratedName) => {
     try {
-      await navigator.clipboard.writeText(item.name);
+      const copied = await copyText(item.name);
+      if (!copied) {
+        showNotice('error', '复制失败，请长按名字手动复制。');
+        return;
+      }
       setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 2000);
       fireTrack('click_copy', {
@@ -685,6 +690,7 @@ export default function App() {
       });
     } catch (err) {
       console.error('Failed to copy', err);
+      showNotice('error', '复制失败，请稍后重试。');
     }
   };
 
