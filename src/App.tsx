@@ -168,6 +168,12 @@ function sanitizeGeneratedNames(value: unknown): GeneratedName[] {
       style_tags: sanitizeStringArray(candidate.style_tags),
       result_rank: typeof candidate.result_rank === 'number' ? candidate.result_rank : undefined,
       generation_id: typeof candidate.generation_id === 'string' ? candidate.generation_id : undefined,
+      favorite_keywords: sanitizeStringArray(candidate.favorite_keywords).slice(0, 2),
+      favorite_meaning: typeof candidate.favorite_meaning === 'string' ? candidate.favorite_meaning : '',
+      favorite_name_mode:
+        candidate.favorite_name_mode === 'en' || candidate.favorite_name_mode === 'mix' || candidate.favorite_name_mode === 'cn'
+          ? candidate.favorite_name_mode
+          : undefined,
     }];
   });
 }
@@ -649,6 +655,10 @@ export default function App() {
           meaning_title: item.meaning_title,
           meaning_desc: item.meaning_desc,
           style_tags: item.style_tags || [],
+          generation_id: item.generation_id,
+          favorite_keywords: item.favorite_keywords || [],
+          favorite_meaning: item.favorite_meaning || '',
+          favorite_name_mode: item.favorite_name_mode,
         })));
       } catch (e) {
         console.error('Failed to load favorites from API', e);
@@ -776,8 +786,18 @@ export default function App() {
           meaning_title: name.meaning_title,
           meaning_desc: name.meaning_desc,
           style_tags: name.style_tags || [],
+          generation_id: name.generation_id || currentGenerationId,
+          favorite_keywords: keywords,
+          favorite_meaning: meaning,
+          favorite_name_mode: nameMode,
         });
-        setFavorites(prev => [name, ...prev]);
+        setFavorites(prev => [{
+          ...name,
+          generation_id: name.generation_id || currentGenerationId,
+          favorite_keywords: keywords,
+          favorite_meaning: meaning,
+          favorite_name_mode: nameMode,
+        }, ...prev]);
         fireTrack('click_favorite', {
           page_name: view,
           generation_id: name.generation_id || currentGenerationId,
@@ -998,6 +1018,10 @@ export default function App() {
       </div>
     </motion.div>
   );
+
+  const sharePosterKeywords = shareTarget?.favorite_keywords?.length ? shareTarget.favorite_keywords : keywords;
+  const sharePosterMeaning = shareTarget?.favorite_meaning || meaning;
+  const sharePosterMode = shareTarget?.favorite_name_mode || nameMode;
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative overflow-hidden flex flex-col">
@@ -1421,9 +1445,9 @@ export default function App() {
                     >
                       <SharePoster
                         item={shareTarget}
-                        keywords={keywords}
-                        meaning={meaning}
-                        nameMode={nameMode}
+                        keywords={sharePosterKeywords}
+                        meaning={sharePosterMeaning}
+                        nameMode={sharePosterMode}
                         variant="preview"
                         className="shadow-[0px_10px_40px_rgba(0,0,0,0.10)]"
                       />
@@ -1452,9 +1476,9 @@ export default function App() {
           <SharePoster
             ref={exportPosterRef}
             item={shareTarget}
-            keywords={keywords}
-            meaning={meaning}
-            nameMode={nameMode}
+            keywords={sharePosterKeywords}
+            meaning={sharePosterMeaning}
+            nameMode={sharePosterMode}
             variant="export"
           />
         </div>

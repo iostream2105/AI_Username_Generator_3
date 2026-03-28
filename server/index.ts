@@ -106,6 +106,10 @@ interface FavoriteBody {
     meaning_title: string;
     meaning_desc: string;
     style_tags: string[];
+    generation_id?: string;
+    favorite_keywords?: string[];
+    favorite_meaning?: string;
+    favorite_name_mode?: "cn" | "en" | "mix";
   };
 }
 
@@ -1049,6 +1053,10 @@ app.post("/api/favorites", async (req, res) => {
       meaningTitle: item.meaning_title || "",
       meaningDesc: item.meaning_desc || "",
       styleTags: Array.isArray(item.style_tags) ? item.style_tags : [],
+      generationId: item.generation_id || "",
+      favoriteKeywords: Array.isArray(item.favorite_keywords) ? item.favorite_keywords : [],
+      favoriteMeaning: item.favorite_meaning || "",
+      favoriteNameMode: item.favorite_name_mode === "en" || item.favorite_name_mode === "mix" ? item.favorite_name_mode : "cn",
     });
     res.json({ ok: true });
   } catch (e: any) {
@@ -1415,6 +1423,7 @@ app.get("/api/admin/export", async (req, res) => {
       const rows = result.rows.map((item) => ({
         ...item,
         style_tags: (item.style_tags || []).join("|"),
+        favorite_keywords: (item.favorite_keywords || []).join("|"),
       }));
       const csv = toCsv(
         [
@@ -1423,6 +1432,10 @@ app.get("/api/admin/export", async (req, res) => {
           "meaning_title",
           "meaning_desc",
           "style_tags",
+          "generation_id",
+          "favorite_keywords",
+          "favorite_meaning",
+          "favorite_name_mode",
           "created_at",
           "updated_at",
         ],

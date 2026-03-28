@@ -1,4 +1,4 @@
-import { GenerateParams, GeneratedName } from "../types";
+import { GenerateParams, GeneratedName, NameMode } from "../types";
 
 // 统一读取前端 API 基础地址：本地走 Vite 代理，生产走环境变量
 function getApiBase() {
@@ -15,6 +15,10 @@ export interface FavoritePayload {
   meaning_title: string;
   meaning_desc: string;
   style_tags: string[];
+  generation_id?: string;
+  favorite_keywords?: string[];
+  favorite_meaning?: string;
+  favorite_name_mode?: NameMode;
 }
 
 export interface TrackEventPayload {

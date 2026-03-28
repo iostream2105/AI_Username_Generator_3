@@ -9,6 +9,10 @@ export interface FavoriteRecord {
   meaningTitle: string;
   meaningDesc: string;
   styleTags: string[];
+  generationId?: string;
+  favoriteKeywords?: string[];
+  favoriteMeaning?: string;
+  favoriteNameMode?: "cn" | "en" | "mix";
 }
 
 export interface FavoriteItem {
@@ -16,6 +20,10 @@ export interface FavoriteItem {
   meaning_title: string;
   meaning_desc: string;
   style_tags: string[];
+  generation_id?: string;
+  favorite_keywords?: string[];
+  favorite_meaning?: string;
+  favorite_name_mode?: "cn" | "en" | "mix";
 }
 
 export interface TrackEventRecord {
@@ -169,6 +177,10 @@ export interface AdminFavoriteRow {
   meaning_title: string;
   meaning_desc: string;
   style_tags: string[];
+  generation_id: string;
+  favorite_keywords: string[];
+  favorite_meaning: string;
+  favorite_name_mode: string;
   created_at: string;
   updated_at: string;
 }
@@ -626,6 +638,10 @@ export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise
         meaning_title,
         meaning_desc,
         style_tags_json,
+        generation_id,
+        favorite_keywords_json,
+        favorite_meaning,
+        favorite_name_mode,
         created_at,
         updated_at
       FROM user_favorite_name
@@ -643,6 +659,10 @@ export async function listAdminFavorites(filters: AdminFavoriteFilters): Promise
       meaning_title: String(row.meaning_title || ""),
       meaning_desc: String(row.meaning_desc || ""),
       style_tags: parseStyleTags(row.style_tags_json),
+      generation_id: String(row.generation_id || ""),
+      favorite_keywords: parseStyleTags(row.favorite_keywords_json),
+      favorite_meaning: String(row.favorite_meaning || ""),
+      favorite_name_mode: parseFavoriteNameMode(row.favorite_name_mode),
       created_at: String(row.created_at || ""),
       updated_at: String(row.updated_at || ""),
     })),
@@ -720,7 +740,11 @@ export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
         name,
         meaning_title,
         meaning_desc,
-        style_tags_json
+        style_tags_json,
+        generation_id,
+        favorite_keywords_json,
+        favorite_meaning,
+        favorite_name_mode
       FROM user_favorite_name
       WHERE user_key = ?
       ORDER BY created_at DESC
@@ -733,6 +757,10 @@ export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
     meaning_title: String(row.meaning_title || ""),
     meaning_desc: String(row.meaning_desc || ""),
     style_tags: parseStyleTags(row.style_tags_json),
+    generation_id: String(row.generation_id || ""),
+    favorite_keywords: parseStyleTags(row.favorite_keywords_json),
+    favorite_meaning: String(row.favorite_meaning || ""),
+    favorite_name_mode: parseFavoriteNameMode(row.favorite_name_mode),
   }));
 }
 
@@ -747,12 +775,20 @@ export async function upsertFavorite(record: FavoriteRecord) {
         name,
         meaning_title,
         meaning_desc,
-        style_tags_json
-      ) VALUES (?, ?, ?, ?, ?)
+        style_tags_json,
+        generation_id,
+        favorite_keywords_json,
+        favorite_meaning,
+        favorite_name_mode
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         meaning_title = VALUES(meaning_title),
         meaning_desc = VALUES(meaning_desc),
         style_tags_json = VALUES(style_tags_json),
+        generation_id = VALUES(generation_id),
+        favorite_keywords_json = VALUES(favorite_keywords_json),
+        favorite_meaning = VALUES(favorite_meaning),
+        favorite_name_mode = VALUES(favorite_name_mode),
         updated_at = CURRENT_TIMESTAMP
     `,
     [
@@ -761,6 +797,10 @@ export async function upsertFavorite(record: FavoriteRecord) {
       record.meaningTitle,
       record.meaningDesc,
       JSON.stringify(record.styleTags || []),
+      record.generationId || "",
+      JSON.stringify(record.favoriteKeywords || []),
+      record.favoriteMeaning || "",
+      record.favoriteNameMode || "cn",
     ]
   );
 }
@@ -1000,4 +1040,12 @@ function parseStyleTags(value: unknown): string[] {
     }
   }
   return [];
+}
+
+function parseFavoriteNameMode(value: unknown): "cn" | "en" | "mix" {
+  const normalized = String(value || "").trim();
+  if (normalized === "en" || normalized === "mix") {
+    return normalized;
+  }
+  return "cn";
 }

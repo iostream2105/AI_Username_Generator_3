@@ -107,13 +107,18 @@ CREATE TABLE IF NOT EXISTS user_favorite_name (
   meaning_title VARCHAR(128) NOT NULL DEFAULT '' COMMENT '寓意标题',
   meaning_desc VARCHAR(512) NOT NULL DEFAULT '' COMMENT '寓意描述',
   style_tags_json JSON NULL COMMENT '风格标签JSON',
+  generation_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '来源生成流程ID',
+  favorite_keywords_json JSON NULL COMMENT '收藏时的输入关键词JSON',
+  favorite_meaning VARCHAR(64) NOT NULL DEFAULT '' COMMENT '收藏时的寓意方向',
+  favorite_name_mode VARCHAR(16) NOT NULL DEFAULT 'cn' COMMENT '收藏时的生成模式',
   _openid VARCHAR(64) DEFAULT '' NOT NULL COMMENT '云开发用户openid',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (id),
   UNIQUE KEY uk_user_name (user_key, name),
   KEY idx_user_created (user_key, created_at),
-  KEY idx_name (name)
+  KEY idx_name (name),
+  KEY idx_generation_id (generation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏网名表';
 
 CREATE TABLE IF NOT EXISTS user_feedback (

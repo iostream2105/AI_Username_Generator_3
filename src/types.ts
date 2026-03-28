@@ -1,3 +1,5 @@
+export type NameMode = "cn" | "en" | "mix";
+
 export interface GeneratedName {
   id: string;
   name: string;
@@ -6,11 +8,14 @@ export interface GeneratedName {
   style_tags: string[];
   result_rank?: number;
   generation_id?: string;
+  favorite_keywords?: string[];
+  favorite_meaning?: string;
+  favorite_name_mode?: NameMode;
 }
 
 export interface GenerateParams {
   keywords: string;
-  nameMode?: "cn" | "en" | "mix";
+  nameMode?: NameMode;
   meaning?: string;
   userKey?: string;
   sessionId?: string;
