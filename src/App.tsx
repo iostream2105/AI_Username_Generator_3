@@ -11,6 +11,18 @@ type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
 type NameMode = 'cn' | 'en' | 'mix';
 
+interface PersistedAppState {
+  view: HistoryView;
+  nameMode: NameMode;
+  keywords: string[];
+  meaning: string;
+  results: GeneratedName[];
+  favorites: GeneratedName[];
+  currentGenerationId: string;
+  shareModalOpen: boolean;
+  shareTarget: GeneratedName | null;
+}
+
 const NAME_MODE_OPTIONS: Array<{ value: NameMode; label: string }> = [
   { value: 'cn', label: '中文网名' },
   { value: 'en', label: '英文网名' },
@@ -120,9 +132,95 @@ const FAQ_ITEMS = [
 const UNSATISFIED_REASONS = ['风格不对', '不够像我', '有点普通', '不好记'];
 const USER_KEY_STORAGE = 'ai_nicknames_user_key';
 const SESSION_KEY_STORAGE = 'ai_nicknames_session_key';
+const APP_STATE_STORAGE = 'mingyouyi_app_state_v1';
 const LOADING_STAGE_TEXTS = ['正在理解关键词...','正在为你寻找灵感...', '正在创作...', '正在润色...'];
 const SHARE_POSTER_PREVIEW_BASE_WIDTH = 320;
 let homeExposureTrackedInRuntime = false;
+
+function sanitizeStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function sanitizeGeneratedNames(value: unknown): GeneratedName[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return [];
+
+    const candidate = item as Partial<GeneratedName>;
+    if (
+      typeof candidate.name !== 'string' ||
+      typeof candidate.meaning_title !== 'string' ||
+      typeof candidate.meaning_desc !== 'string'
+    ) {
+      return [];
+    }
+
+    return [{
+      id:
+        typeof candidate.id === 'string' && candidate.id
+          ? candidate.id
+          : `persisted_${index}_${Math.random().toString(36).slice(2, 8)}`,
+      name: candidate.name,
+      meaning_title: candidate.meaning_title,
+      meaning_desc: candidate.meaning_desc,
+      style_tags: sanitizeStringArray(candidate.style_tags),
+      result_rank: typeof candidate.result_rank === 'number' ? candidate.result_rank : undefined,
+      generation_id: typeof candidate.generation_id === 'string' ? candidate.generation_id : undefined,
+    }];
+  });
+}
+
+function readPersistedAppState(): PersistedAppState | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = sessionStorage.getItem(APP_STATE_STORAGE);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<PersistedAppState> | null;
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const shareTarget = sanitizeGeneratedNames(parsed.shareTarget ? [parsed.shareTarget] : [])[0] ?? null;
+    const results = sanitizeGeneratedNames(parsed.results);
+    const favorites = sanitizeGeneratedNames(parsed.favorites);
+    const rawView: HistoryView =
+      parsed.view === 'results' || parsed.view === 'favorites' || parsed.view === 'home'
+        ? parsed.view
+        : 'home';
+    const view: HistoryView =
+      rawView === 'results' && results.length === 0 && !shareTarget ? 'home' : rawView;
+    const nameMode: NameMode =
+      parsed.nameMode === 'en' || parsed.nameMode === 'mix' || parsed.nameMode === 'cn'
+        ? parsed.nameMode
+        : 'cn';
+
+    return {
+      view,
+      nameMode,
+      keywords: sanitizeStringArray(parsed.keywords).slice(0, 2),
+      meaning: typeof parsed.meaning === 'string' ? parsed.meaning : '',
+      results,
+      favorites,
+      currentGenerationId: typeof parsed.currentGenerationId === 'string' ? parsed.currentGenerationId : '',
+      shareModalOpen: Boolean(parsed.shareModalOpen && shareTarget),
+      shareTarget,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistAppState(snapshot: PersistedAppState) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    sessionStorage.setItem(APP_STATE_STORAGE, JSON.stringify(snapshot));
+  } catch {
+    // Ignore persistence failures and keep the app usable.
+  }
+}
 
 function createLocalId() {
   // 仅用于前端渲染 key，不作为业务主键
@@ -295,30 +393,36 @@ const AutoFitName = ({
 };
 
 export default function App() {
+  const initialAppStateRef = useRef<PersistedAppState | null>(null);
+  if (initialAppStateRef.current === null) {
+    initialAppStateRef.current = readPersistedAppState();
+  }
+  const initialAppState = initialAppStateRef.current;
+
   // 页面主状态机：home -> loading -> results / favorites
-  const [view, setView] = useState<AppView>('home');
-  const [nameMode, setNameMode] = useState<NameMode>('cn');
+  const [view, setView] = useState<AppView>(initialAppState?.view ?? 'home');
+  const [nameMode, setNameMode] = useState<NameMode>(initialAppState?.nameMode ?? 'cn');
   
   // 输入区状态：关键词 + 寓意标签
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<string[]>(initialAppState?.keywords ?? []);
   const [keywordInput, setKeywordInput] = useState('');
-  const [meaning, setMeaning] = useState('');
+  const [meaning, setMeaning] = useState(initialAppState?.meaning ?? '');
   
   // 结果区状态：生成结果、收藏、复制提示、反馈态
-  const [results, setResults] = useState<GeneratedName[]>([]);
-  const [favorites, setFavorites] = useState<GeneratedName[]>([]);
+  const [results, setResults] = useState<GeneratedName[]>(initialAppState?.results ?? []);
+  const [favorites, setFavorites] = useState<GeneratedName[]>(initialAppState?.favorites ?? []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [userKey] = useState<string>(() => getOrCreateUserKey());
   const [sessionId] = useState<string>(() => getOrCreateSessionKey());
-  const [currentGenerationId, setCurrentGenerationId] = useState<string>('');
+  const [currentGenerationId, setCurrentGenerationId] = useState<string>(initialAppState?.currentGenerationId ?? '');
   const [satisfactionStatus, setSatisfactionStatus] = useState<'idle' | 'unsatisfied_selecting' | 'satisfied' | 'unsatisfied_submitted'>('idle');
   const [satisfactionSubmitting, setSatisfactionSubmitting] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [shareTarget, setShareTarget] = useState<GeneratedName | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(Boolean(initialAppState?.shareModalOpen && initialAppState.shareTarget));
+  const [shareTarget, setShareTarget] = useState<GeneratedName | null>(initialAppState?.shareTarget ?? null);
   const [isSavingPoster, setIsSavingPoster] = useState(false);
   const [sharePreviewScale, setSharePreviewScale] = useState(1);
   const [sharePreviewBaseHeight, setSharePreviewBaseHeight] = useState(620);
@@ -479,9 +583,8 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    if (!window.history.state?.appView) {
-      window.history.replaceState({ app: 'mingyouyi', appView: 'home' }, '');
-    }
+    const initialView = view === 'loading' ? 'home' : (view as HistoryView);
+    window.history.replaceState({ app: 'mingyouyi', appView: initialView }, '');
 
     // 监听系统返回：从 history state 还原应用内视图，而不是直接退出页面
     const onPopState = (event: PopStateEvent) => {
@@ -499,6 +602,22 @@ export default function App() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  useEffect(() => {
+    if (view === 'loading') return;
+
+    persistAppState({
+      view: view as HistoryView,
+      nameMode,
+      keywords,
+      meaning,
+      results,
+      favorites,
+      currentGenerationId,
+      shareModalOpen: Boolean(shareModalOpen && shareTarget),
+      shareTarget: shareModalOpen ? shareTarget : null,
+    });
+  }, [view, nameMode, keywords, meaning, results, favorites, currentGenerationId, shareModalOpen, shareTarget]);
 
   // 生成加载态分阶段提示：降低用户“卡住不动”的等待焦虑
   useEffect(() => {
