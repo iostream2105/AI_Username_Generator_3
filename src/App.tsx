@@ -145,6 +145,7 @@ function sanitizeStringArray(value: unknown) {
 function sanitizeGeneratedNames(value: unknown): GeneratedName[] {
   if (!Array.isArray(value)) return [];
 
+  // 统一兜底 sessionStorage / 收藏接口返回的数据形状，避免旧数据把页面恢复流程拖崩。
   return value.flatMap((item, index) => {
     if (!item || typeof item !== 'object') return [];
 
@@ -182,6 +183,7 @@ function readPersistedAppState(): PersistedAppState | null {
   if (typeof window === 'undefined') return null;
 
   try {
+    // 手机浏览器切后台后可能直接回收标签页，这里尽量把用户离开前的页面现场恢复出来。
     const raw = sessionStorage.getItem(APP_STATE_STORAGE);
     if (!raw) return null;
 
@@ -338,6 +340,7 @@ const AutoFitName = ({
       const availableWidth = container.clientWidth;
       if (!availableWidth) return;
 
+      // 默认字号优先，只在标题单行放不下时才往下缩，避免短名字显得过大。
       const computedStyle = window.getComputedStyle(textElement);
       const fontFamily = computedStyle.fontFamily || 'serif';
       const fontWeight = computedStyle.fontWeight || '500';
@@ -486,6 +489,7 @@ export default function App() {
       setSharePreviewScale(Math.max(0.52, nextScale || 1));
     };
 
+    // 预览海报按弹窗可用空间缩放，导出仍使用隐藏的高清节点，不受这里影响。
     const scheduleMeasure = () => {
       if (frameId) {
         window.cancelAnimationFrame(frameId);
@@ -1019,6 +1023,7 @@ export default function App() {
     </motion.div>
   );
 
+  // 分享入口优先使用收藏快照里的输入上下文；普通结果卡则退回当前页面输入。
   const sharePosterKeywords = shareTarget?.favorite_keywords?.length ? shareTarget.favorite_keywords : keywords;
   const sharePosterMeaning = shareTarget?.favorite_meaning || meaning;
   const sharePosterMode = shareTarget?.favorite_name_mode || nameMode;

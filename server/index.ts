@@ -779,6 +779,7 @@ app.post("/api/generate", async (req, res) => {
     );
 
     // 优先模型结构化输出，若解析失败则二次重试一次（严格格式约束）
+    // 模式不匹配也会进入重试，避免模型返回结构正确但语言模式错误的结果。
     let items: NameItem[] = [];
     let parseRetry = false;
 

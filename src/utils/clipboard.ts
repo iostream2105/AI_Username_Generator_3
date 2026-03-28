@@ -3,6 +3,7 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 
+  // 优先走现代剪贴板 API；不少手机浏览器会暴露接口但写入失败，所以还要保留旧方案兜底。
   if (navigator.clipboard?.writeText && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
@@ -16,6 +17,7 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 function legacyCopyText(text: string): boolean {
+  // 用隐藏 textarea 模拟选中复制，兼容不支持 navigator.clipboard 的移动端浏览器。
   const textarea = document.createElement('textarea');
   const selection = window.getSelection();
   const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;

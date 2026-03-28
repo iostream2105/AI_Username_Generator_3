@@ -752,6 +752,7 @@ export async function listFavorites(userKey: string): Promise<FavoriteItem[]> {
     [userKey]
   );
 
+  // 收藏页分享海报需要回显“收藏当时”的输入，因此这里一起返回上下文字段。
   return rows.map((row) => ({
     name: String(row.name || ""),
     meaning_title: String(row.meaning_title || ""),
@@ -792,6 +793,7 @@ export async function upsertFavorite(record: FavoriteRecord) {
         updated_at = CURRENT_TIMESTAMP
     `,
     [
+      // 收藏同时落下输入快照，后续在收藏页再次分享时才能还原原始上下文。
       record.userKey,
       record.name,
       record.meaningTitle,
@@ -1043,6 +1045,7 @@ function parseStyleTags(value: unknown): string[] {
 }
 
 function parseFavoriteNameMode(value: unknown): "cn" | "en" | "mix" {
+  // 历史数据缺字段时统一回退到中文模式，保证旧收藏仍能正常渲染。
   const normalized = String(value || "").trim();
   if (normalized === "en" || normalized === "mix") {
     return normalized;
