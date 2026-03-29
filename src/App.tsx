@@ -457,11 +457,11 @@ export default function App({ landingPage }: AppProps) {
   const valueProps = landingPage.valueProps;
   const faqItems = landingPage.faqItems;
   const internalLandingPages = LANDING_PAGES.filter((page) => page.key !== landingPage.key);
-  const internalLinksTitle = landingPage.key === 'home' ? '按需求直达这些页面' : '你可能还会继续看这些页面';
+  const internalLinksTitle = landingPage.key === 'home' ? '你现在更想改哪一种名字？' : '你也可以看看这些相近场景';
   const internalLinksDescription =
     landingPage.key === 'home'
-      ? '把首页里的高意图需求直接拆出来，让搜索引擎和用户都更容易进入正确页面。'
-      : '从当前场景继续跳到相邻需求页，既方便用户继续筛，也能补足站内内链。';
+      ? '如果你已经知道自己更想换微信昵称、小红书主页名、英文网名或游戏 ID，可以直接进入对应页面。'
+      : '如果你还在比较风格，下面这些入口也许会更适合你现在的需求。';
 
   useLayoutEffect(() => {
     if (!shareModalOpen || !shareTarget || typeof window === 'undefined') {
@@ -1308,7 +1308,7 @@ export default function App({ landingPage }: AppProps) {
                         <div className="flex items-center justify-between gap-3">
                           <h3 className="text-base font-medium text-brand-900">{page.navLabel}</h3>
                           <span className="rounded-full bg-brand-50 px-3 py-1 text-[11px] font-medium text-brand-900">
-                            {page.path}
+                            {page.navBadge}
                           </span>
                         </div>
                         <p className="mt-2 text-sm leading-relaxed text-brand-800/75">{page.navDescription}</p>

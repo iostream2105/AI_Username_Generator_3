@@ -48,6 +48,7 @@ export interface LandingPageConfig {
   path: string;
   analyticsPageName: string;
   navLabel: string;
+  navBadge: string;
   navDescription: string;
   defaultNameMode: NameMode;
   meta: LandingPageMeta;
@@ -164,6 +165,7 @@ export const HOME_LANDING_PAGE: LandingPageConfig = {
   path: '/',
   analyticsPageName: 'home',
   navLabel: 'AI 网名生成器首页',
+  navBadge: '通用入口',
   navDescription: '适合先从通用入口开始，按场景继续分流到微信昵称、小红书昵称、英文网名和游戏 ID 页面。',
   defaultNameMode: 'cn',
   meta: {
@@ -210,6 +212,7 @@ export const WECHAT_LANDING_PAGE: LandingPageConfig = {
   path: '/wechat-nickname',
   analyticsPageName: 'wechat_nickname',
   navLabel: '微信昵称生成器',
+  navBadge: '熟人社交',
   navDescription: '更适合找低调耐看、适合熟人社交和长期使用的微信昵称。',
   defaultNameMode: 'cn',
   meta: {
@@ -301,6 +304,7 @@ export const XHS_LANDING_PAGE: LandingPageConfig = {
   path: '/xiaohongshu-nickname',
   analyticsPageName: 'xiaohongshu_nickname',
   navLabel: '小红书昵称生成器',
+  navBadge: '主页名字',
   navDescription: '更适合找主页昵称、人设号名字和更有辨识度的小红书账号名。',
   defaultNameMode: 'mix',
   meta: {
@@ -392,6 +396,7 @@ export const ENGLISH_LANDING_PAGE: LandingPageConfig = {
   path: '/english-nickname',
   analyticsPageName: 'english_nickname',
   navLabel: '英文网名生成器',
+  navBadge: '高级感英文名',
   navDescription: '更适合找英文主页名、小众英文昵称和带氛围感的英文网名。',
   defaultNameMode: 'en',
   meta: {
@@ -483,6 +488,7 @@ export const GAME_ID_LANDING_PAGE: LandingPageConfig = {
   path: '/game-id',
   analyticsPageName: 'game_id',
   navLabel: '游戏 ID 生成器',
+  navBadge: '不撞名',
   navDescription: '更适合找不撞名、有记忆点、不过度中二的游戏昵称和圈层名字。',
   defaultNameMode: 'cn',
   meta: {
