@@ -65,7 +65,12 @@ npm run build
 - 上传后 CDN 缓存可能会有几分钟延迟
 - 验证时建议带时间戳参数，例如：
   - `https://mingyouyi.cn/?t=20260328`
-- 当前 `npm run build` 会自动生成 `/admin` 与场景页路径对应的静态回退入口文件，所以部署前不要跳过构建步骤，否则这些子路径刷新时会回到 COS `404`
+- 当前 `npm run build` 会自动生成两类静态回退产物，所以部署前不要跳过构建步骤，否则这些子路径访问时会回到 COS `404`
+  - 目录版：`dist/<route>/index.html`
+  - 精确路径版：`.cloudbase-static-fallbacks/<route>.html` 与 `.cloudbase-static-fallbacks/manifest.json`
+- 建议上传顺序：
+  - 先把 `dist/` 上传到静态托管根目录
+  - 再按 `.cloudbase-static-fallbacks/manifest.json` 的映射，把这些源文件上传到不带扩展名的 `cloudPath`，例如 `english-nickname`、`admin`
 
 ## 5. 后端部署流程
 ### 5.1 服务信息
@@ -170,7 +175,10 @@ npm run build
   - `https://mingyouyi.cn/sitemap.xml` 是否已包含上述场景页 URL
   - 页面源码或渲染后 DOM 中是否存在 canonical、JSON-LD 与站内内链
 - 若 CloudBase 静态托管的子路径刷新存在 404，需要补充 SPA 回退策略，确保这些高意图页都能回落到前端入口 `index.html`。
-- 当前仓库已在构建阶段自动补齐这层回退：`scripts/generate-spa-fallbacks.mjs` 会为 `/wechat-nickname`、`/xiaohongshu-nickname`、`/english-nickname`、`/game-id` 以及 `/admin` 生成对应目录下的 `index.html`。
+- 当前仓库已在构建阶段自动补齐这层回退：`scripts/generate-spa-fallbacks.mjs` 会为 `/wechat-nickname`、`/xiaohongshu-nickname`、`/english-nickname`、`/game-id` 以及 `/admin` 生成两套对象：
+  - 目录版：`dist/<route>/index.html`
+  - 精确路径版：`.cloudbase-static-fallbacks/<route>.html`
+- 其中精确路径版需要按 `.cloudbase-static-fallbacks/manifest.json` 补传到同名无扩展名 `cloudPath`，这样 `/wechat-nickname` 与 `/wechat-nickname/` 都能稳定返回前端入口。
 
 ## 搜索引擎提交补充
 - 前端发布后，建议把 `https://mingyouyi.cn/sitemap.xml` 提交到 Google Search Console 与 Bing Webmaster Tools

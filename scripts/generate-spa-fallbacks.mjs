@@ -1,4 +1,4 @@
-import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -6,8 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const distDir = path.join(projectRoot, 'dist');
+const exactFallbackDir = path.join(projectRoot, '.cloudbase-static-fallbacks');
 const landingPagesFile = path.join(projectRoot, 'src', 'landingPages.ts');
 const distIndexFile = path.join(distDir, 'index.html');
+const exactFallbackManifestFile = path.join(exactFallbackDir, 'manifest.json');
 
 function normalizeRoutePath(routePath) {
   return routePath.replace(/^\/+/, '').replace(/\/+$/, '');
@@ -28,22 +30,46 @@ async function getRouteFallbacks() {
   return [...routeSet];
 }
 
+async function writeDirectoryFallback(route, indexHtml) {
+  const fallbackDir = path.join(distDir, route);
+  const fallbackIndexFile = path.join(fallbackDir, 'index.html');
+  await mkdir(fallbackDir, {recursive: true});
+  await writeFile(fallbackIndexFile, indexHtml, 'utf8');
+}
+
+async function writeExactPathFallback(route, indexHtml) {
+  const exactFallbackFile = path.join(exactFallbackDir, `${route}.html`);
+  await mkdir(path.dirname(exactFallbackFile), {recursive: true});
+  await writeFile(exactFallbackFile, indexHtml, 'utf8');
+
+  return {
+    route,
+    cloudPath: route,
+    localPath: exactFallbackFile,
+    relativeLocalPath: path.relative(projectRoot, exactFallbackFile),
+  };
+}
+
 async function main() {
   const [routes, indexHtml] = await Promise.all([
     getRouteFallbacks(),
     readFile(distIndexFile, 'utf8'),
   ]);
 
-  await Promise.all(
+  await rm(exactFallbackDir, {recursive: true, force: true});
+
+  const exactFallbackManifest = await Promise.all(
     routes.map(async (route) => {
-      const fallbackDir = path.join(distDir, route);
-      const fallbackIndexFile = path.join(fallbackDir, 'index.html');
-      await mkdir(fallbackDir, {recursive: true});
-      await writeFile(fallbackIndexFile, indexHtml, 'utf8');
+      await writeDirectoryFallback(route, indexHtml);
+      return writeExactPathFallback(route, indexHtml);
     }),
   );
 
-  console.log(`Generated SPA fallback entry files for ${routes.length} routes.`);
+  await writeFile(exactFallbackManifestFile, JSON.stringify(exactFallbackManifest, null, 2), 'utf8');
+
+  console.log(
+    `Generated ${routes.length} directory fallbacks in dist and ${exactFallbackManifest.length} exact-path fallback artifacts in ${path.relative(projectRoot, exactFallbackManifestFile)}.`,
+  );
 }
 
 await main();
