@@ -6,6 +6,7 @@ import { SharePoster } from './components/SharePoster';
 import { GeneratedName, GenerateParams, NameMode } from './types';
 import { copyText } from './utils/clipboard';
 import { buildPosterFileName, downloadBlob, exportPosterBlob } from './utils/share';
+import { LANDING_PAGES } from './landingPages';
 import type { LandingKeywordSuggestion, LandingPageConfig } from './landingPages';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
@@ -455,6 +456,12 @@ export default function App({ landingPage }: AppProps) {
   const sceneSection = landingPage.sceneSection;
   const valueProps = landingPage.valueProps;
   const faqItems = landingPage.faqItems;
+  const internalLandingPages = LANDING_PAGES.filter((page) => page.key !== landingPage.key);
+  const internalLinksTitle = landingPage.key === 'home' ? '按需求直达这些页面' : '你可能还会继续看这些页面';
+  const internalLinksDescription =
+    landingPage.key === 'home'
+      ? '把首页里的高意图需求直接拆出来，让搜索引擎和用户都更容易进入正确页面。'
+      : '从当前场景继续跳到相邻需求页，既方便用户继续筛，也能补足站内内链。';
 
   useLayoutEffect(() => {
     if (!shareModalOpen || !shareTarget || typeof window === 'undefined') {
@@ -961,6 +968,16 @@ export default function App({ landingPage }: AppProps) {
     });
   };
 
+  const handleInternalLandingLinkClick = (targetPath: string, targetLabel: string) => {
+    fireTrack('click_internal_landing_link', {
+      page_name: landingPageName,
+      properties: {
+        target_path: targetPath,
+        target_label: targetLabel,
+      },
+    });
+  };
+
   const handleKeywordInputChange = (rawValue: string) => {
     // iOS 输入中会逐字符提交，只有在“明确结束输入”时才拆词，避免错分
     if (isKeywordComposing) {
@@ -1271,6 +1288,31 @@ export default function App({ landingPage }: AppProps) {
                       >
                         {scene}
                       </span>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h2 className="font-serif text-xl text-brand-900">{internalLinksTitle}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-brand-800/75">
+                    {internalLinksDescription}
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {internalLandingPages.map((page) => (
+                      <a
+                        key={page.key}
+                        href={page.path}
+                        onClick={() => handleInternalLandingLinkClick(page.path, page.navLabel)}
+                        className="block rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] transition-transform hover:-translate-y-0.5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-base font-medium text-brand-900">{page.navLabel}</h3>
+                          <span className="rounded-full bg-brand-50 px-3 py-1 text-[11px] font-medium text-brand-900">
+                            {page.path}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-relaxed text-brand-800/75">{page.navDescription}</p>
+                      </a>
                     ))}
                   </div>
                 </section>

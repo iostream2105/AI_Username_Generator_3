@@ -166,4 +166,10 @@ npm run build
   - `https://mingyouyi.cn/english-nickname`
   - `https://mingyouyi.cn/game-id`
   - 各场景页首屏的推荐输入按钮、场景 CTA、示例区标题是否与路径对应
+  - `https://mingyouyi.cn/sitemap.xml` 是否已包含上述场景页 URL
+  - 页面源码或渲染后 DOM 中是否存在 canonical、JSON-LD 与站内内链
 - 若 CloudBase 静态托管的子路径刷新存在 404，需要补充 SPA 回退策略，确保这些高意图页都能回落到前端入口 `index.html`。
+
+## 搜索引擎提交补充
+- 前端发布后，建议把 `https://mingyouyi.cn/sitemap.xml` 提交到 Google Search Console 与 Bing Webmaster Tools
+- 如果场景页刚上线，短期内搜索结果仍可能优先展示首页；待抓取、收录和站内外链接积累后，才会逐步切到对应场景页

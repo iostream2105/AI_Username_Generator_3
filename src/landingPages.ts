@@ -47,6 +47,8 @@ export interface LandingPageConfig {
   key: string;
   path: string;
   analyticsPageName: string;
+  navLabel: string;
+  navDescription: string;
   defaultNameMode: NameMode;
   meta: LandingPageMeta;
   hero: LandingHero;
@@ -161,6 +163,8 @@ export const HOME_LANDING_PAGE: LandingPageConfig = {
   key: 'home',
   path: '/',
   analyticsPageName: 'home',
+  navLabel: 'AI 网名生成器首页',
+  navDescription: '适合先从通用入口开始，按场景继续分流到微信昵称、小红书昵称、英文网名和游戏 ID 页面。',
   defaultNameMode: 'cn',
   meta: {
     title: '名有意 | AI网名生成器，生成有寓意、像你的专属网名',
@@ -205,6 +209,8 @@ export const WECHAT_LANDING_PAGE: LandingPageConfig = {
   key: 'wechat-nickname',
   path: '/wechat-nickname',
   analyticsPageName: 'wechat_nickname',
+  navLabel: '微信昵称生成器',
+  navDescription: '更适合找低调耐看、适合熟人社交和长期使用的微信昵称。',
   defaultNameMode: 'cn',
   meta: {
     title: '微信昵称生成器 | AI生成有寓意、像你的微信昵称 - 名有意',
@@ -294,6 +300,8 @@ export const XHS_LANDING_PAGE: LandingPageConfig = {
   key: 'xiaohongshu-nickname',
   path: '/xiaohongshu-nickname',
   analyticsPageName: 'xiaohongshu_nickname',
+  navLabel: '小红书昵称生成器',
+  navDescription: '更适合找主页昵称、人设号名字和更有辨识度的小红书账号名。',
   defaultNameMode: 'mix',
   meta: {
     title: '小红书昵称生成器 | AI生成高辨识度主页昵称 - 名有意',
@@ -383,6 +391,8 @@ export const ENGLISH_LANDING_PAGE: LandingPageConfig = {
   key: 'english-nickname',
   path: '/english-nickname',
   analyticsPageName: 'english_nickname',
+  navLabel: '英文网名生成器',
+  navDescription: '更适合找英文主页名、小众英文昵称和带氛围感的英文网名。',
   defaultNameMode: 'en',
   meta: {
     title: '英文网名生成器 | AI生成高级感英文昵称 - 名有意',
@@ -472,6 +482,8 @@ export const GAME_ID_LANDING_PAGE: LandingPageConfig = {
   key: 'game-id',
   path: '/game-id',
   analyticsPageName: 'game_id',
+  navLabel: '游戏 ID 生成器',
+  navDescription: '更适合找不撞名、有记忆点、不过度中二的游戏昵称和圈层名字。',
   defaultNameMode: 'cn',
   meta: {
     title: '游戏ID生成器 | AI生成不撞名游戏昵称 - 名有意',

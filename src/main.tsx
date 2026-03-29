@@ -38,12 +38,24 @@ function upsertCanonical(href: string) {
   link.setAttribute('href', href);
 }
 
+function upsertStructuredData(id: string, data: Record<string, unknown>) {
+  let script = document.querySelector(`script[data-structured-data="${id}"]`);
+  if (!script) {
+    script = document.createElement('script');
+    script.setAttribute('type', 'application/ld+json');
+    script.setAttribute('data-structured-data', id);
+    document.head.appendChild(script);
+  }
+  script.textContent = JSON.stringify(data);
+}
+
 document.documentElement.lang = 'zh-CN';
 document.title = isAdminPath ? '名有意后台管理' : landingPage?.meta.title || '名有意 | AI网名生成器，生成有寓意、像你的专属网名';
 upsertMeta('robots', isAdminPath ? 'noindex,nofollow' : 'index,follow,max-image-preview:large');
 
 if (!isAdminPath && landingPage) {
   const canonicalUrl = `${window.location.origin}${landingPage.meta.canonicalPath}`;
+  const websiteUrl = window.location.origin;
   upsertMeta('description', landingPage.meta.description);
   upsertMeta('keywords', landingPage.meta.keywords.join(','));
   upsertCanonical(canonicalUrl);
@@ -52,6 +64,45 @@ if (!isAdminPath && landingPage) {
   upsertPropertyMeta('og:url', canonicalUrl);
   upsertMeta('twitter:title', landingPage.meta.title);
   upsertMeta('twitter:description', landingPage.meta.description);
+
+  upsertStructuredData('website', {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: '名有意',
+    url: websiteUrl,
+    inLanguage: 'zh-CN',
+  });
+
+  upsertStructuredData('webpage', {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: landingPage.navLabel,
+    description: landingPage.meta.description,
+    url: canonicalUrl,
+    inLanguage: 'zh-CN',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: '名有意',
+      url: websiteUrl,
+    },
+    breadcrumb: {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '名有意首页',
+          item: websiteUrl,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: landingPage.navLabel,
+          item: canonicalUrl,
+        },
+      ],
+    },
+  });
 }
 
 createRoot(document.getElementById('root')!).render(

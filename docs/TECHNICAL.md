@@ -296,7 +296,9 @@
   - `/english-nickname`
   - `/game-id`
 - `src/main.tsx` 会根据 pathname 解析场景页配置，并动态设置页面 `title`、`description`、`keywords`、`canonical`、`og` 与 `twitter` meta。
+- `src/main.tsx` 当前还会按场景页写入基础 JSON-LD 结构化数据（`WebSite` + `WebPage/BreadcrumbList`），用于帮助搜索引擎理解页面归属与层级关系。
 - `src/App.tsx` 当前已接入配置驱动的首页骨架字段：Hero 文案、默认生成模式、结果示例、场景标签区、价值点区、FAQ 区。
 - `src/App.tsx` 本轮继续接入场景化首屏增强字段：Hero 亮点标签、关键词提示文案、推荐输入按钮、模式推荐提示、场景专属 CTA。
 - 推荐输入按钮支持一键写入 `keywords`，并可同时切换推荐的 `meaning` 与 `nameMode`，用于降低移动端输入成本。
+- `src/App.tsx` 已新增首页/场景页之间的真实内链卡片，优先服务用户继续筛选，也为场景页提供可抓取的站内入口。
 - 后续新增场景页时，优先新增配置，不再复制整页组件。

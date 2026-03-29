@@ -235,3 +235,5 @@ npm run preview
 - 当前已支持首批 4 个高意图场景页：`/wechat-nickname`、`/xiaohongshu-nickname`、`/english-nickname`、`/game-id`
 - 场景页共用同一套前端模板，但会按路径切换首屏文案、默认模式、推荐输入、CTA、示例结果、FAQ 与 SEO Meta
 - 当前首屏已支持“推荐输入一键填入”，用于降低移动端输入成本并强化场景匹配感
+- 首页与各场景页之间已补充真实站内内链，方便用户跳转，也方便搜索引擎发现这些页面
+- `public/sitemap.xml` 已包含首批 4 个高意图场景页，发布后需在 Search Console / Bing Webmaster Tools 手工提交收录
