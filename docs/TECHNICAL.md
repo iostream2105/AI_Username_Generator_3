@@ -63,6 +63,7 @@
 补充：
 - 当前仓库没有单独的 `build:prod` 脚本，生产构建直接使用 `npm run build`。
 - 当前线上主站通过同域路由访问后端（`https://mingyouyi.cn/api/*`）。
+- `npm run build` 完成后会执行 `scripts/generate-spa-fallbacks.mjs`，自动为 `/admin` 与场景页子路径生成静态 `index.html` 回退入口，解决 CloudBase 静态托管下直接访问子路径的 `404` 问题。
 
 ## 4. API 约定
 ### `POST /api/generate`
@@ -302,3 +303,4 @@
 - 推荐输入按钮支持一键写入 `keywords`，并可同时切换推荐的 `meaning` 与 `nameMode`，用于降低移动端输入成本。
 - `src/App.tsx` 已新增首页/场景页之间的真实内链卡片，优先服务用户继续筛选，也为场景页提供可抓取的站内入口。
 - 后续新增场景页时，优先新增配置，不再复制整页组件。
+- `scripts/generate-spa-fallbacks.mjs` 会在每次构建后扫描 `src/landingPages.ts` 中的 `path` 配置，并为这些路径以及 `/admin` 生成静态回退入口，确保 CloudBase 静态托管对深链访问和刷新友好。

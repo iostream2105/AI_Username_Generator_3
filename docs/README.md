@@ -192,6 +192,7 @@ npm run preview
 说明：
 - 当前仓库没有单独的 `build:prod` 脚本，生产构建直接使用 `npm run build`。
 - 仅在“前端需要跨域直连后端”时，才建议显式设置 `VITE_API_BASE_URL`。
+- `npm run build` 结束后会自动补齐静态托管的 SPA 回退入口文件，当前会为 `/admin` 以及 `src/landingPages.ts` 中声明的场景页路径生成对应的 `index.html`，避免 CloudBase 静态托管下直接访问子路径返回 `404`。
 
 ## 数据库迁移说明
 - 首次建库请执行：`sql/app_schema.sql`
@@ -237,3 +238,4 @@ npm run preview
 - 当前首屏已支持“推荐输入一键填入”，用于降低移动端输入成本并强化场景匹配感
 - 首页与各场景页之间已补充真实站内内链，方便用户跳转，也方便搜索引擎发现这些页面
 - `public/sitemap.xml` 已包含首批 4 个高意图场景页，发布后需在 Search Console / Bing Webmaster Tools 手工提交收录
+- 生产构建会自动为这些场景页和 `/admin` 生成静态托管回退入口，因此在 CloudBase 静态托管中可直接访问或刷新这些路径，而不会落成 COS `NoSuchKey` 404
