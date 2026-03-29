@@ -225,6 +225,7 @@ npm run preview
 - 后台文档：`ADMIN_DASHBOARD.md`
 - PRD：`PRD.md`
 - 增长策略：`GROWTH_STRATEGY.md`
+- 场景页规划：`LANDING_PAGE_PLAN.md`
 - 小红书内容手册：`XHS_CONTENT_PLAYBOOK.md`
 - 小红书 10 篇终稿：`XHS_10_FINAL_POSTS.md`
 - 数据库结构：`sql/app_schema.sql`

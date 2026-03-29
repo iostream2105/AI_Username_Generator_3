@@ -150,3 +150,19 @@ npm run build
 - 后端是否已更新 CloudRun
 - 主域名验证结果
 - `/api/favorites` 或 `/api/generate` 验证结果
+## 场景页发布补充（2026-03）
+- 当前首批高意图场景页路径：
+  - `/wechat-nickname`
+  - `/xiaohongshu-nickname`
+  - `/english-nickname`
+  - `/game-id`
+- 这些路径仍然走前端单页应用入口，部署后需要重点验证：
+  - 直接访问子路径是否能返回前端页面
+  - 刷新子路径是否不会返回 404
+  - 场景页子路径下的静态资源是否正常加载
+- 发布后建议手工验证：
+  - `https://mingyouyi.cn/wechat-nickname`
+  - `https://mingyouyi.cn/xiaohongshu-nickname`
+  - `https://mingyouyi.cn/english-nickname`
+  - `https://mingyouyi.cn/game-id`
+- 若 CloudBase 静态托管的子路径刷新存在 404，需要补充 SPA 回退策略，确保这些高意图页都能回落到前端入口 `index.html`。

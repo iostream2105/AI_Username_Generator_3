@@ -288,3 +288,13 @@
   - 输入卡片
   - 品牌介绍卡片
 - 站点文案与站点地址统一在第 3 张卡片展示。
+## 场景页增量说明（2026-03）
+- 新增 `src/landingPages.ts`，集中维护首页与高意图场景页配置。
+- 当前首批场景页路径：
+  - `/wechat-nickname`
+  - `/xiaohongshu-nickname`
+  - `/english-nickname`
+  - `/game-id`
+- `src/main.tsx` 会根据 pathname 解析场景页配置，并动态设置页面 `title`、`description`、`keywords`、`canonical`、`og` 与 `twitter` meta。
+- `src/App.tsx` 当前已接入配置驱动的首页骨架字段：Hero 文案、默认生成模式、结果示例、场景标签区、价值点区、FAQ 区。
+- 后续新增场景页时，优先新增配置，不再复制整页组件。

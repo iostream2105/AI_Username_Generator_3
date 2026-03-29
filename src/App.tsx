@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Heart, Copy, RefreshCw, ChevronLeft, Bookmark, Check, ChevronDown, X, MessageSquare, Share2, Download } from 'lucide-react';
 import { addFavorite, fetchFavorites, generateNames, removeFavorite, submitFeedback, trackEvent } from './services/ai';
 import { SharePoster } from './components/SharePoster';
-import { GeneratedName, GenerateParams } from './types';
+import { GeneratedName, GenerateParams, NameMode } from './types';
 import { copyText } from './utils/clipboard';
 import { buildPosterFileName, downloadBlob, exportPosterBlob } from './utils/share';
+import type { LandingPageConfig } from './landingPages';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
-type NameMode = 'cn' | 'en' | 'mix';
 
 interface PersistedAppState {
   view: HistoryView;
@@ -21,6 +21,10 @@ interface PersistedAppState {
   currentGenerationId: string;
   shareModalOpen: boolean;
   shareTarget: GeneratedName | null;
+}
+
+interface AppProps {
+  landingPage: LandingPageConfig;
 }
 
 const NAME_MODE_OPTIONS: Array<{ value: NameMode; label: string }> = [
@@ -401,7 +405,7 @@ const AutoFitName = ({
   );
 };
 
-export default function App() {
+export default function App({ landingPage }: AppProps) {
   const initialAppStateRef = useRef<PersistedAppState | null>(null);
   if (initialAppStateRef.current === null) {
     initialAppStateRef.current = readPersistedAppState();
@@ -410,7 +414,7 @@ export default function App() {
 
   // 页面主状态机：home -> loading -> results / favorites
   const [view, setView] = useState<AppView>(initialAppState?.view ?? 'home');
-  const [nameMode, setNameMode] = useState<NameMode>(initialAppState?.nameMode ?? 'cn');
+  const [nameMode, setNameMode] = useState<NameMode>(initialAppState?.nameMode ?? landingPage.defaultNameMode);
   
   // 输入区状态：关键词 + 寓意标签
   const [keywords, setKeywords] = useState<string[]>(initialAppState?.keywords ?? []);
@@ -444,7 +448,12 @@ export default function App() {
   const shareModalActionsRef = useRef<HTMLDivElement | null>(null);
   const sharePreviewContentRef = useRef<HTMLDivElement | null>(null);
   const modeHints = MODE_HINTS[nameMode];
-  const modeExamples = MODE_EXAMPLES[nameMode];
+  const modeExamples = landingPage.modeExamples[nameMode];
+  const landingPageName = landingPage.analyticsPageName;
+  const hero = landingPage.hero;
+  const sceneSection = landingPage.sceneSection;
+  const valueProps = landingPage.valueProps;
+  const faqItems = landingPage.faqItems;
 
   useLayoutEffect(() => {
     if (!shareModalOpen || !shareTarget || typeof window === 'undefined') {
@@ -586,7 +595,7 @@ export default function App() {
     // React StrictMode 在开发环境会触发双挂载，这里做一次运行时去重，避免曝光重复上报
     if (homeExposureTrackedInRuntime) return;
     homeExposureTrackedInRuntime = true;
-    fireTrack('home_exposure', { page_name: 'home' });
+    fireTrack('home_exposure', { page_name: landingPageName });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -908,7 +917,7 @@ export default function App() {
       setKeywords(next);
       accepted.forEach((kw, idx) => {
         fireTrack('input_keywords', {
-          page_name: 'home',
+          page_name: landingPageName,
           properties: { keyword: kw, keyword_count: keywords.length + idx + 1 },
         });
       });
@@ -1058,16 +1067,15 @@ export default function App() {
               className="pt-4"
             >
               <p className="mb-3 text-[11px] uppercase tracking-[0.28em] text-brand-800/40">
-                AI 寓意网名生成器
+                {hero.eyebrow}
               </p>
               <h1 className="font-serif text-[clamp(20px,6.8vw,30px)] leading-[1.35] mb-4 text-brand-900">
-                <span className="block">把你的缩写、生日和情绪，</span>
-                <span className="block">生成成一个有寓意、像你的专属网名。</span>
+                {hero.titleLines.map((line) => (
+                  <span key={line} className="block">{line}</span>
+                ))}
               </h1>
               <p className="text-brand-800/70 text-[clamp(11px,3.5vw,14px)] leading-[1.7]">
-                <span className="block">
-                  输入 1-2 个关键词，快速获得 3 个适合 QQ / 微信昵称、小红书 / 抖音昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。
-                </span>
+                <span className="block">{hero.description}</span>
               </p>
               <div className="mb-10 mt-5" />
 
@@ -1142,7 +1150,7 @@ export default function App() {
                       value={meaning} 
                       onChange={(val) => {
                         setMeaning(val);
-                        fireTrack('select_meaning', { page_name: 'home', meaning_tag: val || '' });
+                        fireTrack('select_meaning', { page_name: landingPageName, meaning_tag: val || '' });
                       }} 
                       options={MEANING_TAGS} 
                       placeholder="不限寓意" 
@@ -1187,12 +1195,12 @@ export default function App() {
 
               <div className="mt-12 space-y-8">
                 <section className="rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
-                  <h2 className="font-serif text-xl text-brand-900">适合这些起名场景</h2>
+                  <h2 className="font-serif text-xl text-brand-900">{sceneSection.title}</h2>
                   <p className="mt-2 text-sm leading-relaxed text-brand-800/75">
-                    如果你正在找 QQ / 微信昵称、想换一个更有辨识度的小红书或抖音昵称、想做游戏 ID，或者想要一个高级感英文社媒名，这里都可以作为灵感入口。
+                    {sceneSection.description}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {HOME_SCENES.map((scene) => (
+                    {sceneSection.scenes.map((scene) => (
                       <span
                         key={scene}
                         className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-900"
@@ -1204,9 +1212,9 @@ export default function App() {
                 </section>
 
                 <section>
-                  <h2 className="font-serif text-xl text-brand-900">为什么大家会喜欢名有意</h2>
+                  <h2 className="font-serif text-xl text-brand-900">{landingPage.valuePropsTitle}</h2>
                   <div className="mt-4 space-y-3">
-                    {VALUE_PROPS.map((item) => (
+                    {valueProps.map((item) => (
                       <article
                         key={item.title}
                         className="rounded-[28px] bg-white/75 p-5 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]"
@@ -1219,9 +1227,9 @@ export default function App() {
                 </section>
 
                 <section>
-                  <h2 className="font-serif text-xl text-brand-900">常见问题</h2>
+                  <h2 className="font-serif text-xl text-brand-900">{landingPage.faqTitle}</h2>
                   <div className="mt-4 space-y-3">
-                    {FAQ_ITEMS.map((item) => (
+                    {faqItems.map((item) => (
                       <details
                         key={item.question}
                         className="rounded-[24px] bg-white/75 px-5 py-4 text-sm text-brand-800/80 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]"
