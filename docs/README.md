@@ -226,5 +226,6 @@ npm run preview
 - PRD：`PRD.md`
 - 增长策略：`GROWTH_STRATEGY.md`
 - 小红书内容手册：`XHS_CONTENT_PLAYBOOK.md`
+- 小红书 10 篇终稿：`XHS_10_FINAL_POSTS.md`
 - 数据库结构：`sql/app_schema.sql`
 - 收藏上下文迁移：`sql/2026-03-28_add_favorite_context.sql`
