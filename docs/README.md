@@ -224,5 +224,6 @@ npm run preview
 - 部署文档：`DEPLOYMENT.md`
 - 后台文档：`ADMIN_DASHBOARD.md`
 - PRD：`PRD.md`
+- 增长策略：`GROWTH_STRATEGY.md`
 - 数据库结构：`sql/app_schema.sql`
 - 收藏上下文迁移：`sql/2026-03-28_add_favorite_context.sql`
