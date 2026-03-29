@@ -164,9 +164,9 @@ export const HOME_LANDING_PAGE: LandingPageConfig = {
   key: 'home',
   path: '/',
   analyticsPageName: 'home',
-  navLabel: 'AI 网名生成器首页',
-  navBadge: '通用入口',
-  navDescription: '适合先从通用入口开始，按场景继续分流到微信昵称、小红书昵称、英文网名和游戏 ID 页面。',
+  navLabel: '回首页试试更多风格',
+  navBadge: '全部类型',
+  navDescription: '如果你还没想好更适合哪一种名字，可以先回首页，从中文、英文和中英混合慢慢试。',
   defaultNameMode: 'cn',
   meta: {
     title: '名有意 | AI网名生成器，生成有寓意、像你的专属网名',
