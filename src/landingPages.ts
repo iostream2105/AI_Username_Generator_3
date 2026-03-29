@@ -36,6 +36,13 @@ export interface LandingSceneSection {
   scenes: string[];
 }
 
+export interface LandingKeywordSuggestion {
+  label: string;
+  keywords: string[];
+  meaning?: string;
+  mode?: NameMode;
+}
+
 export interface LandingPageConfig {
   key: string;
   path: string;
@@ -43,6 +50,16 @@ export interface LandingPageConfig {
   defaultNameMode: NameMode;
   meta: LandingPageMeta;
   hero: LandingHero;
+  heroHighlights: string[];
+  keywordLabel: string;
+  keywordHint: string;
+  keywordPlaceholder: string;
+  keywordPlaceholderFilled: string;
+  keywordSuggestionsTitle: string;
+  keywordSuggestions: LandingKeywordSuggestion[];
+  modeRecommendation: string;
+  examplesTitle: string;
+  generateButtonLabel: string;
   sceneSection: LandingSceneSection;
   valuePropsTitle: string;
   valueProps: LandingValueProp[];
@@ -157,6 +174,20 @@ export const HOME_LANDING_PAGE: LandingPageConfig = {
     description:
       '输入 1-2 个关键词，快速获得 3 个适合 QQ / 微信昵称、小红书 / 抖音昵称、游戏 ID 或英文社媒名的结果，每个都附带寓意解释。',
   },
+  heroHighlights: ['支持中文 / 英文 / 中英混合', '每个名字都附寓意解释', '适合微信 / 小红书 / 游戏场景'],
+  keywordLabel: '你的个人线索',
+  keywordHint: '推荐输入缩写、月份、情绪词或意象词，1-2 个就够，更容易生成像你的名字。',
+  keywordPlaceholder: '例如 zk、7月 或 月亮、治愈',
+  keywordPlaceholderFilled: '再补一个词会更像你',
+  keywordSuggestionsTitle: '不知道怎么写？试试这些输入',
+  keywordSuggestions: [
+    { label: 'zk + 7月', keywords: ['zk', '7月'], meaning: '治愈安定', mode: 'cn' },
+    { label: '月亮 + 清醒', keywords: ['月亮', '清醒'], meaning: '自由探索', mode: 'mix' },
+    { label: '海 + 松弛', keywords: ['海', '松弛'], meaning: '治愈安定', mode: 'en' },
+  ],
+  modeRecommendation: '不确定时先试中文；想更有辨识度，再试英文或中英混合。',
+  examplesTitle: '结果示例',
+  generateButtonLabel: '生成专属网名',
   sceneSection: {
     title: '适合这些起名场景',
     description:
@@ -187,6 +218,20 @@ export const WECHAT_LANDING_PAGE: LandingPageConfig = {
     description:
       '输入 1-2 个关键词，快速获得适合微信昵称、熟人社交展示和长期使用场景的有寓意名字，每个结果都附带解释。',
   },
+  heroHighlights: ['更适合长期挂着的微信昵称', '优先低调耐看，不尴尬', '推荐从缩写 / 月份 / 情绪开始'],
+  keywordLabel: '你想放进微信昵称里的线索',
+  keywordHint: '先输缩写、月份或情绪词，更容易得到耐看的微信昵称。',
+  keywordPlaceholder: '例如 zk、10月 或 月亮、松弛',
+  keywordPlaceholderFilled: '再补一个词，会更像你平时会用的微信昵称',
+  keywordSuggestionsTitle: '直接试试这些微信昵称输入',
+  keywordSuggestions: [
+    { label: 'zk + 10月', keywords: ['zk', '10月'], meaning: '治愈安定', mode: 'cn' },
+    { label: '月亮 + 松弛', keywords: ['月亮', '松弛'], meaning: '治愈安定', mode: 'cn' },
+    { label: '海 + 清醒', keywords: ['海', '清醒'], meaning: '成长进阶', mode: 'mix' },
+  ],
+  modeRecommendation: '微信昵称优先试中文；想更有辨识度，再切到中英混合。',
+  examplesTitle: '微信昵称示例',
+  generateButtonLabel: '生成微信昵称',
   sceneSection: {
     title: '适合这些微信昵称场景',
     description:
@@ -262,6 +307,20 @@ export const XHS_LANDING_PAGE: LandingPageConfig = {
     description:
       '输入 1-2 个关键词，快速获得适合小红书主页、人设号、内容账号和英文社媒名场景的昵称灵感，每个结果都附带寓意解释。',
   },
+  heroHighlights: ['适合主页名字和内容账号', '默认更推荐中英混合', '更强调氛围感和辨识度'],
+  keywordLabel: '你希望主页名字带上的感觉',
+  keywordHint: '推荐把缩写、月份、情绪词和意象词组合着输，更容易出主页感。',
+  keywordPlaceholder: '例如 zk、自由 或 月亮、清醒',
+  keywordPlaceholderFilled: '再补一个词，会更像一个主页名字',
+  keywordSuggestionsTitle: '试试这些更适合主页昵称的输入',
+  keywordSuggestions: [
+    { label: 'zk + 自由', keywords: ['zk', '自由'], meaning: '自由探索', mode: 'mix' },
+    { label: '月亮 + 清醒', keywords: ['月亮', '清醒'], meaning: '成长进阶', mode: 'mix' },
+    { label: '7月 + 治愈', keywords: ['7月', '治愈'], meaning: '治愈安定', mode: 'en' },
+  ],
+  modeRecommendation: '做主页昵称时优先试中英混合；做英文内容号可直接切英文模式。',
+  examplesTitle: '小红书昵称示例',
+  generateButtonLabel: '生成小红书昵称',
   sceneSection: {
     title: '适合这些小红书昵称场景',
     description:
@@ -337,6 +396,20 @@ export const ENGLISH_LANDING_PAGE: LandingPageConfig = {
     description:
       '输入 1-2 个关键词，快速获得适合英文网名、社媒主页、英文人设和小众风格表达的名字结果，每个结果都附带寓意解释。',
   },
+  heroHighlights: ['中文词也能生成英文昵称', '更适合主页和社媒展示', '默认推荐英文模式'],
+  keywordLabel: '你想放进英文昵称里的感觉',
+  keywordHint: '不会写英文提示词也没关系，直接输中文意象和情绪词就行。',
+  keywordPlaceholder: '例如 月亮、治愈 或 海、清醒',
+  keywordPlaceholderFilled: '再补一个词，会更容易出高级感英文昵称',
+  keywordSuggestionsTitle: '试试这些英文昵称输入',
+  keywordSuggestions: [
+    { label: '月亮 + 治愈', keywords: ['月亮', '治愈'], meaning: '治愈安定', mode: 'en' },
+    { label: '海 + 清醒', keywords: ['海', '清醒'], meaning: '成长进阶', mode: 'en' },
+    { label: '风 + 浪漫', keywords: ['风', '浪漫'], meaning: '浪漫心动', mode: 'en' },
+  ],
+  modeRecommendation: '这页默认就适合英文模式；如果想要更特别，也可以切中英混合。',
+  examplesTitle: '英文昵称示例',
+  generateButtonLabel: '生成英文昵称',
   sceneSection: {
     title: '适合这些英文昵称场景',
     description:
@@ -412,6 +485,20 @@ export const GAME_ID_LANDING_PAGE: LandingPageConfig = {
     description:
       '输入 1-2 个关键词，快速获得适合游戏 ID、圈层昵称和高辨识度名字场景的结果，每个都附带寓意解释，方便你筛选更有记忆点的方向。',
   },
+  heroHighlights: ['更偏不撞名和记忆点', '不过度中二，也不过于平', '适合游戏 ID / 战队昵称 / 圈层名'],
+  keywordLabel: '你想放进游戏 ID 的线索',
+  keywordHint: '推荐用缩写、意象词和状态词组合输入，更容易出不撞名的方向。',
+  keywordPlaceholder: '例如 zk、夜色 或 海、清醒',
+  keywordPlaceholderFilled: '再补一个词，会更容易出有记忆点的游戏 ID',
+  keywordSuggestionsTitle: '试试这些更适合游戏 ID 的输入',
+  keywordSuggestions: [
+    { label: 'zk + 夜色', keywords: ['zk', '夜色'], meaning: '自由探索', mode: 'cn' },
+    { label: '海 + 清醒', keywords: ['海', '清醒'], meaning: '成长进阶', mode: 'cn' },
+    { label: '风 + 月亮', keywords: ['风', '月亮'], meaning: '浪漫心动', mode: 'mix' },
+  ],
+  modeRecommendation: '游戏 ID 先试中文更稳，再按你玩的品类切到英文或中英混合。',
+  examplesTitle: '游戏 ID 示例',
+  generateButtonLabel: '生成游戏 ID',
   sceneSection: {
     title: '适合这些游戏 ID 场景',
     description:

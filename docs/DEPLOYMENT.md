@@ -165,4 +165,5 @@ npm run build
   - `https://mingyouyi.cn/xiaohongshu-nickname`
   - `https://mingyouyi.cn/english-nickname`
   - `https://mingyouyi.cn/game-id`
+  - 各场景页首屏的推荐输入按钮、场景 CTA、示例区标题是否与路径对应
 - 若 CloudBase 静态托管的子路径刷新存在 404，需要补充 SPA 回退策略，确保这些高意图页都能回落到前端入口 `index.html`。

@@ -230,3 +230,8 @@ npm run preview
 - 小红书 10 篇终稿：`XHS_10_FINAL_POSTS.md`
 - 数据库结构：`sql/app_schema.sql`
 - 收藏上下文迁移：`sql/2026-03-28_add_favorite_context.sql`
+
+## 高意图场景页（当前已落地）
+- 当前已支持首批 4 个高意图场景页：`/wechat-nickname`、`/xiaohongshu-nickname`、`/english-nickname`、`/game-id`
+- 场景页共用同一套前端模板，但会按路径切换首屏文案、默认模式、推荐输入、CTA、示例结果、FAQ 与 SEO Meta
+- 当前首屏已支持“推荐输入一键填入”，用于降低移动端输入成本并强化场景匹配感

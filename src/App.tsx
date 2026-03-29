@@ -6,7 +6,7 @@ import { SharePoster } from './components/SharePoster';
 import { GeneratedName, GenerateParams, NameMode } from './types';
 import { copyText } from './utils/clipboard';
 import { buildPosterFileName, downloadBlob, exportPosterBlob } from './utils/share';
-import type { LandingPageConfig } from './landingPages';
+import type { LandingKeywordSuggestion, LandingPageConfig } from './landingPages';
 
 type AppView = 'home' | 'loading' | 'results' | 'favorites';
 type HistoryView = 'home' | 'results' | 'favorites';
@@ -451,6 +451,7 @@ export default function App({ landingPage }: AppProps) {
   const modeExamples = landingPage.modeExamples[nameMode];
   const landingPageName = landingPage.analyticsPageName;
   const hero = landingPage.hero;
+  const heroHighlights = landingPage.heroHighlights;
   const sceneSection = landingPage.sceneSection;
   const valueProps = landingPage.valueProps;
   const faqItems = landingPage.faqItems;
@@ -930,6 +931,36 @@ export default function App({ landingPage }: AppProps) {
     setKeywordInput('');
   };
 
+  const applyKeywordSuggestion = (suggestion: LandingKeywordSuggestion) => {
+    const nextKeywords = suggestion.keywords
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    if (nextKeywords.length === 0) return;
+
+    setKeywords(nextKeywords);
+    setKeywordInput('');
+
+    if (suggestion.meaning) {
+      setMeaning(suggestion.meaning);
+    }
+
+    if (suggestion.mode) {
+      setNameMode(suggestion.mode);
+    }
+
+    fireTrack('click_keyword_suggestion', {
+      page_name: landingPageName,
+      meaning_tag: suggestion.meaning || meaning || '',
+      properties: {
+        suggestion_label: suggestion.label,
+        suggestion_keywords: nextKeywords.join(','),
+        suggestion_mode: suggestion.mode || '',
+      },
+    });
+  };
+
   const handleKeywordInputChange = (rawValue: string) => {
     // iOS 输入中会逐字符提交，只有在“明确结束输入”时才拆词，避免错分
     if (isKeywordComposing) {
@@ -1077,13 +1108,23 @@ export default function App({ landingPage }: AppProps) {
               <p className="text-brand-800/70 text-[clamp(11px,3.5vw,14px)] leading-[1.7]">
                 <span className="block">{hero.description}</span>
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {heroHighlights.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full bg-white/75 px-3 py-1.5 text-[11px] font-medium text-brand-900 shadow-[0px_4px_14px_rgba(0,0,0,0.03)]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
               <div className="mb-10 mt-5" />
 
               <div className="space-y-8">
                 {/* Keywords */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-brand-900">
-                    关键词 <span className="text-brand-800/50 font-normal">(必填，1-2个)</span>
+                    {landingPage.keywordLabel} <span className="text-brand-800/50 font-normal">(必填，1-2 个)</span>
                   </label>
                   <div className="w-full bg-white border-none rounded-2xl px-4 py-3 min-h-[56px] flex flex-wrap items-center gap-2 shadow-[0px_2px_10px_rgba(0,0,0,0.02)] transition-all focus-within:ring-2 focus-within:ring-brand-800/20">
                     {keywords.map((kw, idx) => (
@@ -1109,12 +1150,34 @@ export default function App({ landingPage }: AppProps) {
                           handleKeywordInputChange(e.currentTarget.value);
                         }}
                         onBlur={addKeyword}
-                        placeholder={keywords.length === 0 ? "输入后按空格或回车添加" : "继续输入..."}
+                        placeholder={keywords.length === 0 ? landingPage.keywordPlaceholder : landingPage.keywordPlaceholderFilled}
                         className="flex-1 bg-transparent border-none outline-none text-brand-900 placeholder:text-brand-800/30 min-w-[120px] text-sm"
                       />
                     )}
                   </div>
-                  <p className="text-[clamp(11px,2.7vw,11px)] text-brand-800/50 whitespace-nowrap">{modeHints.keywordHint}</p>
+                  <p className="text-[clamp(11px,2.9vw,11px)] leading-relaxed text-brand-800/50">{landingPage.keywordHint}</p>
+                  <div className="rounded-[24px] bg-white/65 p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-brand-900">{landingPage.keywordSuggestionsTitle}</p>
+                      <span className="text-[11px] text-brand-800/45">点一下直接填入</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {landingPage.keywordSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.label}
+                          type="button"
+                          onClick={() => applyKeywordSuggestion(suggestion)}
+                          className="rounded-2xl border border-brand-900/8 bg-brand-50/80 px-3 py-2 text-left text-xs text-brand-900 transition-colors hover:bg-brand-100"
+                        >
+                          <span className="block font-medium">{suggestion.label}</span>
+                          <span className="mt-1 block text-[10px] text-brand-800/60">
+                            {suggestion.mode ? `${NAME_MODE_OPTIONS.find((item) => item.value === suggestion.mode)?.label || ''} · ` : ''}
+                            {suggestion.meaning || '不限寓意'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Name Mode */}
@@ -1138,13 +1201,14 @@ export default function App({ landingPage }: AppProps) {
                       </button>
                     ))}
                   </div>
+                  <p className="text-[11px] leading-relaxed text-brand-800/50">{landingPage.modeRecommendation}</p>
                 </div>
 
                 {/* Meaning Dropdown */}
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-3">
                     <label className="block text-sm font-medium text-brand-900">
-                      期望寓意 <span className="text-brand-800/50 font-normal">(选填)</span>
+                    期望寓意 <span className="text-brand-800/50 font-normal">(选填)</span>
                     </label>
                     <CustomSelect 
                       value={meaning} 
@@ -1163,7 +1227,7 @@ export default function App({ landingPage }: AppProps) {
               <div className="mt-10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-[1px] flex-1 bg-brand-900/10"></div>
-                  <span className="text-xs font-medium text-brand-800/40 uppercase tracking-widest">{modeHints.subtitle}</span>
+                  <span className="text-xs font-medium text-brand-800/40 uppercase tracking-widest">{landingPage.examplesTitle}</span>
                   <div className="h-[1px] flex-1 bg-brand-900/10"></div>
                 </div>
                 
@@ -1189,7 +1253,7 @@ export default function App({ landingPage }: AppProps) {
                   className="w-full bg-[#5A5A40] text-white rounded-full py-4 font-medium tracking-wide flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#4A4A30] transition-colors shadow-lg shadow-[#5A5A40]/20"
                 >
                   <Sparkles size={18} />
-                  立即生成
+                  {landingPage.generateButtonLabel}
                 </button>
               </div>
 
