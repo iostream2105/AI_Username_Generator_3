@@ -321,7 +321,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 
 const AutoFitName = ({
   text,
-  defaultFontSize = 38,
+  defaultFontSize = 32,
   minFontSize = 24,
 }: {
   text: string;
@@ -398,7 +398,7 @@ const AutoFitName = ({
         ref={textRef}
         title={text}
         className="overflow-hidden whitespace-nowrap font-serif font-medium tracking-tight text-brand-900 pb-[0.08em]"
-        style={{ fontSize: `${fontSize}px`, lineHeight: 1.14 }}
+        style={{ fontSize: `${fontSize}px`, lineHeight: 1.2 }}
       >
         {text}
       </h3>
