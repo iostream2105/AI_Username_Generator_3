@@ -397,8 +397,8 @@ const AutoFitName = ({
       <h3
         ref={textRef}
         title={text}
-        className="overflow-hidden whitespace-nowrap font-serif font-medium tracking-tight text-brand-900"
-        style={{ fontSize: `${fontSize}px`, lineHeight: 1.04 }}
+        className="overflow-hidden whitespace-nowrap font-serif font-medium tracking-tight text-brand-900 pb-[0.08em]"
+        style={{ fontSize: `${fontSize}px`, lineHeight: 1.14 }}
       >
         {text}
       </h3>
