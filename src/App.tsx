@@ -321,7 +321,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }: { value: string
 
 const AutoFitName = ({
   text,
-  defaultFontSize = 40,
+  defaultFontSize = 38,
   minFontSize = 24,
 }: {
   text: string;
