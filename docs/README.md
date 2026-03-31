@@ -196,11 +196,6 @@ npm run preview
   - 在 `dist/<route>/index.html` 生成目录版回退入口，用于兼容带尾斜杠或目录索引访问
   - 在 `.cloudbase-static-fallbacks/` 生成无扩展名精确路径对象的源文件和 `manifest.json`，用于兼容 CloudBase 静态托管下 `/english-nickname` 这类不带尾斜杠的直达访问
 
-## 数据库迁移说明
-- 首次建库请执行：`sql/app_schema.sql`
-- 已有库升级到“收藏上下文”能力时，请手动执行：`sql/2026-03-28_add_favorite_context.sql`
-- 当前后端启动时不会自动执行表结构迁移或历史数据回填，数据库变更需显式执行 SQL
-- 建议将每次数据库变更记录到部署流程中，避免线上与本地结构不一致
 
 ## 手机局域网调试
 - 前端已默认支持局域网访问（`vite --host=0.0.0.0`）。
