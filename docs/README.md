@@ -154,9 +154,9 @@ npm run dev
 `POST /api/generate` 请求体：
 ```json
 {
-  "keywords": "月亮、海",
+  "keywords": "WGS",
   "nameMode": "cn",
-  "meaning": "自由",
+  "meaning": "自由探索",
   "userKey": "u_xxx",
   "sessionId": "s_xxx",
   "generationId": "gen_xxx"
