@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f6b5c">
+  <meta
+    name="description"
+    content="名有意移动端优先 UI v2 原型，覆盖关键词输入、生成加载、结果浏览、收藏留存、海报分享与反馈流程。"
+  >
+  <title>名有意 · 新 UI v2（移动端优先）</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Sora:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="bg-decor bg-decor-a" aria-hidden="true"></div>
+  <div class="bg-decor bg-decor-b" aria-hidden="true"></div>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <div class="mobile-shell" id="mobileShell">
+    <header class="topbar">
+      <div class="brand">
+        <p class="brand-kicker">MINGYOUYI</p>
+        <p class="brand-title">名有意</p>
+      </div>
+      <button type="button" class="pill-btn" id="openFeedbackTop">产品反馈</button>
+    </header>
+
+    <main class="view-root" id="viewRoot">
+      <section class="view is-active" id="view-home" aria-label="首页">
+        <section class="hero-card reveal">
+          <div class="hero-top">
+            <span class="hero-badge">AI 寓意网名生成器</span>
+            <span class="hero-dot"></span>
+          </div>
+          <h1>
+            把你的关键词，<br>
+            变成有故事的名字
+          </h1>
+          <p>
+            输入 1-2 个关键词，选择模式和寓意方向，快速生成 3 个“有寓意、像自己”的网名结果。
+          </p>
+          <div class="hero-metrics">
+            <span>每次返回 3 个候选</span>
+            <span>复制 / 收藏 / 海报</span>
+            <span>移动端体验优先</span>
+          </div>
+        </section>
+
+        <section class="card reveal delay-1">
+          <div class="card-head">
+            <h2>输入线索</h2>
+            <p>最多 2 个关键词</p>
+          </div>
+          <div class="keyword-box" id="keywordBox" aria-live="polite"></div>
+          <div class="keyword-row">
+            <input
+              id="keywordInput"
+              type="text"
+              maxlength="24"
+              autocomplete="off"
+              placeholder="例如：zk、月亮、海、7月"
+              aria-label="关键词输入"
+            >
+            <button type="button" class="ghost-btn solid" id="addKeywordBtn">添加</button>
+          </div>
+          <p class="helper-text">
+            推荐输入姓名缩写、生日月份、情绪词或意象词，更容易得到“像你”的结果。
+          </p>
+          <div class="chip-row" id="quickKeywordRow">
+            <button type="button" class="chip" data-keyword="zk">zk</button>
+            <button type="button" class="chip" data-keyword="7月">7月</button>
+            <button type="button" class="chip" data-keyword="月亮">月亮</button>
+            <button type="button" class="chip" data-keyword="海">海</button>
+            <button type="button" class="chip" data-keyword="清醒">清醒</button>
+            <button type="button" class="chip" data-keyword="治愈">治愈</button>
+          </div>
+        </section>
+
+        <section class="card reveal delay-2">
+          <div class="card-head">
+            <h2>生成模式</h2>
+            <p>必选</p>
+          </div>
+          <div class="mode-segment" id="modeSegment">
+            <button type="button" class="mode-btn is-selected" data-mode="cn">中文网名</button>
+            <button type="button" class="mode-btn" data-mode="en">英文网名</button>
+            <button type="button" class="mode-btn" data-mode="mix">中英混合</button>
+          </div>
+          <p class="mode-hint" id="modeHint">中文模式更适合微信、QQ、小红书昵称场景。</p>
+        </section>
+
+        <section class="card reveal delay-3">
+          <div class="card-head">
+            <h2>期望寓意</h2>
+            <p>选填</p>
+          </div>
+          <div class="chip-row" id="meaningRow">
+            <button type="button" class="chip" data-meaning="自由探索">自由探索</button>
+            <button type="button" class="chip" data-meaning="治愈安定">治愈安定</button>
+            <button type="button" class="chip" data-meaning="成长进阶">成长进阶</button>
+            <button type="button" class="chip" data-meaning="浪漫心动">浪漫心动</button>
+            <button type="button" class="chip" data-meaning="幸运开运">幸运开运</button>
+          </div>
+        </section>
+
+        <button type="button" class="primary-btn reveal delay-3" id="generateBtn">立即生成 3 个结果</button>
+
+        <section class="scene-grid reveal delay-3">
+          <article class="scene-item">
+            <h3>适配场景</h3>
+            <p>微信昵称 / 小红书昵称 / 游戏 ID / 英文社媒名</p>
+          </article>
+          <article class="scene-item">
+            <h3>结果结构</h3>
+            <p>网名 + 寓意标题 + 一句话解释 + 风格标签</p>
+          </article>
+          <article class="scene-item">
+            <h3>主链路动作</h3>
+            <p>复制、收藏、海报保存、换一批、返回编辑</p>
+          </article>
+        </section>
+      </section>
+
+      <section class="view" id="view-loading" aria-label="加载中">
+        <div class="loading-panel">
+          <div class="loading-ring" aria-hidden="true"></div>
+          <h2 id="loadingTitle">正在理解关键词...</h2>
+          <p>通常 2-4 秒内完成，请稍候</p>
+        </div>
+      </section>
+
+      <section class="view" id="view-results" aria-label="结果页">
+        <header class="inline-head">
+          <button type="button" class="icon-btn" id="resultBackBtn">返回</button>
+          <div class="inline-title">
+            <p>RESULTS</p>
+            <h2>为你定制的网名</h2>
+          </div>
+          <span class="inline-count" id="resultCount">0 条</span>
+        </header>
+
+        <div class="result-stack" id="resultStack"></div>
+
+        <section class="card compact">
+          <div class="card-head">
+            <h3>这一组结果满意吗？</h3>
+            <p>快速反馈</p>
+          </div>
+          <p class="satisfaction-text" id="satisfactionText">
+            你的反馈会用于优化生成质量与结果风格。
+          </p>
+          <div class="action-row">
+            <button type="button" class="ghost-btn wide" id="satisfiedBtn">满意</button>
+            <button type="button" class="ghost-btn wide" id="unsatisfiedBtn">不满意</button>
+          </div>
+          <div class="chip-row hidden" id="reasonRow">
+            <button type="button" class="chip reason-chip" data-reason="风格不对">风格不对</button>
+            <button type="button" class="chip reason-chip" data-reason="不够像我">不够像我</button>
+            <button type="button" class="chip reason-chip" data-reason="有点普通">有点普通</button>
+            <button type="button" class="chip reason-chip" data-reason="不好记">不好记</button>
+          </div>
+        </section>
+
+        <div class="sticky-actions">
+          <button type="button" class="ghost-btn wide" id="editBtn">返回修改</button>
+          <button type="button" class="primary-btn small" id="regenBtn">换一批</button>
+        </div>
+      </section>
+
+      <section class="view" id="view-favorites" aria-label="收藏页">
+        <header class="inline-head">
+          <button type="button" class="icon-btn" id="favoriteBackBtn">返回</button>
+          <div class="inline-title">
+            <p>FAVORITES</p>
+            <h2>我的收藏</h2>
+          </div>
+          <span class="inline-count" id="favoriteCount">0 条</span>
+        </header>
+
+        <p class="empty-text hidden" id="favoriteEmpty">
+          你还没有收藏结果，先去生成一批试试看。
+        </p>
+        <div class="result-stack" id="favoriteStack"></div>
+      </section>
+    </main>
+
+    <nav class="tabbar">
+      <button type="button" class="tab-btn is-active" data-tab="home">首页</button>
+      <button type="button" class="tab-btn" data-tab="favorites">收藏</button>
+      <button type="button" class="tab-btn" data-tab="feedback">反馈</button>
+    </nav>
+  </div>
+
+  <div class="modal hidden" id="shareModal" role="dialog" aria-modal="true" aria-label="分享海报">
+    <div class="modal-mask" data-close-share="1"></div>
+    <section class="modal-panel">
+      <header class="modal-head">
+        <div>
+          <p>POSTER</p>
+          <h3>分享结果海报</h3>
+        </div>
+        <button type="button" class="icon-btn tiny" id="closeShareBtn">关闭</button>
+      </header>
+
+      <article class="poster">
+        <section class="poster-block main">
+          <p class="poster-mode" id="posterMode">中文网名</p>
+          <h4 id="posterName">云峤</h4>
+          <p class="poster-title" id="posterTitle">沉静中的坚定</p>
+          <p class="poster-desc" id="posterDesc">这是海报预览文案。</p>
+          <div class="poster-tags" id="posterTags"></div>
+        </section>
+        <section class="poster-block">
+          <p class="poster-meta" id="posterKeywords">关键词：-</p>
+          <p class="poster-meta" id="posterMeaning">寓意方向：-</p>
+        </section>
+        <section class="poster-brand">
+          <p>把你的关键词和期待，变成有寓意、像你的专属网名。</p>
+          <strong>mingyouyi.cn</strong>
+        </section>
+      </article>
+
+      <button type="button" class="primary-btn small" id="savePosterBtn">保存海报</button>
+    </section>
+  </div>
+
+  <div class="modal hidden" id="feedbackModal" role="dialog" aria-modal="true" aria-label="意见反馈">
+    <div class="modal-mask" data-close-feedback="1"></div>
+    <section class="modal-panel">
+      <header class="modal-head">
+        <div>
+          <p>FEEDBACK</p>
+          <h3>告诉我们你的想法</h3>
+        </div>
+        <button type="button" class="icon-btn tiny" id="closeFeedbackBtn">关闭</button>
+      </header>
+      <textarea
+        id="feedbackInput"
+        maxlength="240"
+        placeholder="例如：我希望新增情侣昵称模式，或者结果更清冷一点。"
+      ></textarea>
+      <div class="action-row">
+        <button type="button" class="ghost-btn wide" id="cancelFeedbackBtn">取消</button>
+        <button type="button" class="primary-btn small" id="submitFeedbackBtn">提交反馈</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
